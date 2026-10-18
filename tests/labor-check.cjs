@@ -42,7 +42,7 @@ const fs=require('node:fs');
   await page.goto(atlasUrl('/division'),{waitUntil:'networkidle'});
   await page.locator('#division-page').waitFor();
   const banner=await page.locator('#division-banner').innerText();
-  check(banner.includes('待整理') || banner.includes('仍需人工确认') || banner.includes('证据不足') || banner.includes('交接受阻') || banner.includes('不是认证通过'),'division banner stays conservative');
+  check(banner.includes('待整理') || banner.includes('仍需人工确认') || banner.includes('证据不足') || banner.includes('交接受阻') || banner.includes('不是认证通过') || banner.includes('不能判为通过') || banner.includes('分析盲区'),'division banner stays conservative');
   check(!/可以独立交付|认证通过/.test(banner) || banner.includes('不能') || banner.includes('不是'),'banner does not certify delivery');
   check(await page.locator('#inbox').innerText().then(text=>text.includes('待整理')),'inbox bucket is visible');
   const claimable=Number(await page.locator('#claimable-count').innerText());

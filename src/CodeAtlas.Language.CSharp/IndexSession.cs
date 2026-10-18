@@ -221,7 +221,9 @@ internal sealed partial class IndexSession(SourceSnapshot snapshot, CSharpCompil
         }
         if (method.Name is "AddSingleton" or "AddScoped" or "AddTransient" &&
             method.ContainingNamespace.ToDisplayString() == "Microsoft.Extensions.DependencyInjection" &&
-            !(nodes.TryGetValue(owner, out CodeNode? site) && site.Symbol.Contains("CodeAtlas.Composition.AtlasRegistration", StringComparison.Ordinal)))
+            !(nodes.TryGetValue(owner, out CodeNode? site) &&
+                (site.Symbol.Contains("CodeAtlas.Composition.AtlasRegistration", StringComparison.Ordinal) ||
+                 site.Role == ArchitecturalRole.Test || site.Source.Path.StartsWith("tests/", StringComparison.Ordinal))))
         {
             findings.Add(new("AT118", FindingSeverity.Warning,
                 "发现未经过 AddAtlas 的容器注册。不能确认 AtlasProvides，也不能据此判断模块已经可拆装。",

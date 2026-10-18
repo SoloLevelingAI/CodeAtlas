@@ -1,0 +1,231 @@
+model {
+  actor reader '本机阅读者' {
+    description '在本机阅读源码、规范、漂移和代码地图，不把报告上传到外部系统。'
+    metadata {
+      owner '阅读者'
+      domain '使用'
+    }
+  }
+
+  system codeatlas 'CodeAtlas' {
+    description '按功能阅读代码，并把目标架构与 Roslyn 源码图对照。缺少模型时结果是未知，不是通过。'
+    metadata {
+      owner '架构'
+      domain '代码阅读'
+      atlasId 'codeatlas'
+    }
+
+    container desktop 'Desktop 宿主' {
+      #host
+      technology 'WPF'
+      description '本机窗口。截图写入走导出端口，不在页面代码里直接碰文件。'
+      metadata {
+        owner '桌面'
+        domain '宿主'
+        atlasId 'desktop'
+      }
+    }
+
+    container web 'Web 宿主' {
+      #host
+      technology 'ASP.NET Core'
+      description '浏览器里的功能地图、规范、分工和 C4 逐级视图。'
+      metadata {
+        owner 'Web'
+        domain '宿主'
+        atlasId 'web'
+      }
+    }
+
+    container cli 'CLI 宿主' {
+      #host
+      technology '.NET'
+      description '以 JSON 和退出码执行分析、检查和查询。'
+      metadata {
+        owner '命令行'
+        domain '宿主'
+        atlasId 'cli'
+      }
+    }
+
+    component foundation '共享基础' {
+      description '多个模块共同使用的声明和值对象。它不是可单独启动的运行模块。'
+      metadata {
+        owner '基础'
+        domain '共享契约'
+        atlasId 'atlas.foundation'
+        runtime 'false'
+      }
+    }
+
+    component analysis '源码分析' {
+      #runtime
+      description '盘点仓库、建立 C# 源码图，并执行架构规则。'
+      metadata {
+        owner '分析'
+        domain '分析'
+        atlasId 'atlas.analysis'
+        runtime 'true'
+        provides [
+          'atlas.analysis|CodeAtlas.Contracts.IAnalysisService|1.0',
+          'atlas.sources|CodeAtlas.Contracts.ISourceRepository|1.0',
+          'atlas.csharp|CodeAtlas.Contracts.ICodeIndexer|1.0',
+          'atlas.rules|CodeAtlas.Contracts.IArchitectureRules|1.0',
+          'atlas.target-model|CodeAtlas.Contracts.ITargetModelSource|1.0'
+        ]
+        implementations [
+          'CodeAtlas.Contracts.IAnalysisService',
+          'CodeAtlas.Contracts.ISourceRepository',
+          'CodeAtlas.Contracts.ICodeIndexer',
+          'CodeAtlas.Contracts.ITargetModelSource'
+        ]
+      }
+    }
+
+    component reports '报告管理' {
+      #runtime
+      description '读取和安全保存原始报告快照。'
+      metadata {
+        owner '报告'
+        domain '报告'
+        atlasId 'atlas.reports'
+        runtime 'true'
+        provides [
+          'atlas.reports|CodeAtlas.Contracts.IReportRepository|1.0',
+          'atlas.report-reader|CodeAtlas.Contracts.IReportFileReader|1.0'
+        ]
+        implementations [
+          'CodeAtlas.Contracts.IReportRepository',
+          'CodeAtlas.Contracts.IReportFileReader'
+        ]
+      }
+    }
+
+    component explore '代码探索' {
+      #runtime
+      description '用可替换工作区连接报告、导航和嵌套地图。'
+      metadata {
+        owner '探索'
+        domain '探索'
+        atlasId 'atlas.explore'
+        runtime 'true'
+        provides [
+          'atlas.workspace|CodeAtlas.Contracts.IExplorerWorkspace|1.0'
+        ]
+        requires [
+          'atlas.reports|CodeAtlas.Contracts.IReportRepository|1.0|false',
+          'atlas.analysis|CodeAtlas.Contracts.IAnalysisService|1.0|false'
+        ]
+        implementations [
+          'CodeAtlas.Contracts.IExplorerWorkspace',
+          'CodeAtlas.Contracts.IScreenshotExport'
+        ]
+      }
+
+      component navigation '管理探索状态' {
+        #runtime
+        description '维护选择、路径和有界浏览历史。'
+        metadata {
+          owner '探索'
+          domain '导航'
+          atlasId 'atlas.explore.navigation'
+          runtime 'true'
+        }
+
+        component history '恢复浏览位置' {
+          #runtime
+          description '撤销和重做浏览动作，保留分支状态。'
+          metadata {
+            owner '探索'
+            domain '历史'
+            atlasId 'atlas.explore.navigation.history'
+            runtime 'true'
+          }
+        }
+      }
+
+      component index '报告索引' {
+        #runtime
+        description '查询原始报告，源码证据仍留在报告里。'
+        metadata {
+          owner '探索'
+          domain '索引'
+          atlasId 'atlas.explore.index'
+          runtime 'true'
+        }
+      }
+
+      component map '功能地图页' {
+        #runtime
+        description '用同一个 ExpandableMap 展开源码功能与已启用的运行模块。'
+        metadata {
+          owner 'Web'
+          domain '视图'
+          atlasId 'atlas.explore.map'
+          runtime 'true'
+          requires [
+            'atlas.workspace|CodeAtlas.Contracts.IExplorerWorkspace|1.0|false'
+          ]
+          provides [
+            'atlas.standards-reader|CodeAtlas.Contracts.IStandardsReader|1.0'
+          ]
+        }
+      }
+    }
+
+    component quality '质量检查' {
+      description '把目标模型和源码图对照，并保留未知项。它不单独作为一个启动 Profile。'
+      metadata {
+        owner '质量'
+        domain '质量'
+        atlasId 'atlas.quality'
+        runtime 'false'
+        implementations [
+          'CodeAtlas.Contracts.IArchitectureRules',
+          'CodeAtlas.Contracts.IStandardsReader'
+        ]
+      }
+    }
+
+    component runtime '运行与组装' {
+      description '选择端口提供方，并提供本机命令和浏览器入口。'
+      metadata {
+        owner '运行'
+        domain '组装'
+        atlasId 'atlas.runtime'
+        runtime 'false'
+      }
+    }
+
+    desktop -[uses]-> analysis '启动分析'
+    desktop -[uses]-> reports '读取报告'
+    desktop -[uses]-> explore '桌面探索'
+
+    web -[uses]-> analysis '按需重新分析'
+    web -[uses]-> reports '读取报告'
+    web -[uses]-> explore '探索工作区'
+    web -[uses]-> explore.map '功能地图'
+
+    cli -[uses]-> analysis '执行分析'
+    cli -[uses]-> reports '读写报告'
+
+    analysis -[dependency]-> foundation '使用共享契约'
+    analysis -[dependency]-> quality '使用规则端口'
+    reports -[dependency]-> foundation '使用共享契约'
+    reports -[dependency]-> analysis '使用分析报告类型'
+    explore -[dependency]-> foundation '使用共享契约'
+    explore -[dependency]-> analysis '需要分析能力'
+    explore -[dependency]-> reports '需要报告能力'
+    explore -[dependency]-> quality '读取规范端口'
+    explore -[dependency]-> runtime '使用本机控制契约'
+    quality -[dependency]-> foundation '使用共享契约'
+    quality -[dependency]-> analysis '读取源码图类型'
+    runtime -[dependency]-> foundation '组装契约'
+    runtime -[dependency]-> analysis '装配分析'
+    runtime -[dependency]-> reports '装配报告'
+    runtime -[dependency]-> explore '装配探索'
+    runtime -[dependency]-> quality '装配规则'
+  }
+
+  reader -[uses]-> codeatlas '在本机阅读'
+}

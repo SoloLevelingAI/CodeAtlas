@@ -1,5 +1,6 @@
 using CodeAtlas.Composition;
 using CodeAtlas.Contracts;
+using CodeAtlas.Exploration;
 using CodeAtlas.Presentation;
 using CodeAtlas.Runtime;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,9 +15,10 @@ public static class WebModules
     {
         ModuleRegistry registry = AtlasRuntime.CreateRegistry(reports)
             .Register(new("atlas.explore.map", "功能地图页", "用同一个 ExpandableMap 展开源码功能与实际启用的运行模块。", new(0, 2, 0), "atlas.explore",
+                Provides: [new("atlas.standards-reader", typeof(IStandardsReader), new(1, 0))],
                 Requires: [new("atlas.workspace", typeof(IExplorerWorkspace), new(1, 0))],
                 Views: [new("atlas.explore.map", "代码探索", "web.main", "atlas.explorer", "atlas.workspace")]),
-                collection => collection.AddScoped<GraphExplorerViewModel>());
+                collection => collection.AddScopedViewModel<GraphExplorerViewModel>().AddAtlas<IStandardsReader, EmbeddedStandardsReader>());
         ModuleProfile profile = profileId switch
         {
             "web" => new("web", ["atlas.explore.map", "atlas.explore.navigation.history", "atlas.explore.index"]),

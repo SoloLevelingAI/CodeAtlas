@@ -1,0 +1,8 @@
+{
+  "name": "codeatlas-architecture",
+  "private": true,
+  "description": "CodeAtlas 的 LikeC4 目标架构。图和 JSON 由 scripts/sync-likec4.py 同步。",
+  "devDependencies": {
+    "likec4": "1.53.0"
+  }
+}

@@ -21,6 +21,8 @@ public partial class MainWindow : Window
 {
     private readonly DesktopWorkspace workspace;
     private readonly string sessionName;
+    private readonly IScreenshotExport screenshots;
+    private readonly IStandardsReader standards;
     private readonly DispatcherTimer searchTimer = new() { Interval = TimeSpan.FromMilliseconds(180) };
     private readonly DispatcherTimer scrollTimer = new() { Interval = TimeSpan.FromMilliseconds(70) };
     private bool compact;
@@ -32,9 +34,9 @@ public partial class MainWindow : Window
     private ExplorerSession Session => workspace.Session;
 
     /// <summary>绑定稳定的会话对象，订阅界面相关状态变化。</summary>
-    public MainWindow(DesktopWorkspace workspace, string sessionName)
+    public MainWindow(DesktopWorkspace workspace, string sessionName, IScreenshotExport screenshots, IStandardsReader standards)
     {
-        this.workspace = workspace; this.sessionName = sessionName;
+        this.workspace = workspace; this.sessionName = sessionName; this.screenshots = screenshots; this.standards = standards;
         InitializeComponent(); DataContext = workspace;
         searchTimer.Tick += (_, _) => { searchTimer.Stop(); Session.Search(SearchBox.Text); SearchPanel.Visibility = string.IsNullOrWhiteSpace(SearchBox.Text) ? Visibility.Collapsed : Visibility.Visible; };
         scrollTimer.Tick += (_, _) => { scrollTimer.Stop(); TrackVisibleRoot(); };
@@ -230,7 +232,7 @@ public partial class MainWindow : Window
     /// <summary>按当前报告展示规范、诊断证据与待执行的整理路线。</summary>
     private void OnArchitecture(object sender, RoutedEventArgs e)
     {
-        new ArchitectureWindow(Session.Index?.Report, id =>
+        new ArchitectureWindow(Session.Index?.Report, standards, id =>
         {
             Session.SetView("tree"); Session.Select(id); Activate();
         }) { Owner = this }.Show();
@@ -396,8 +398,9 @@ public partial class MainWindow : Window
         var bitmap = new RenderTargetBitmap(Math.Max(1, (int)RootSurface.ActualWidth), Math.Max(1, (int)RootSurface.ActualHeight), 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(RootSurface);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
-        using FileStream stream = File.Create(path); encoder.Save(stream); return path;
+        using var buffer = new System.IO.MemoryStream();
+        encoder.Save(buffer);
+        return screenshots.WritePng(path, buffer.ToArray());
     }
 
     /// <summary>在窗口内报告操作失败，不中断当前阅读会话。</summary>

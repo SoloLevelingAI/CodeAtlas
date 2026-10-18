@@ -15,14 +15,16 @@ public sealed class ArchitectureWindow : Window
 {
     private readonly StackPanel detail = new() { Margin = new Thickness(22) };
     private readonly AnalysisReport? report;
+    private readonly IStandardsReader standards;
     private readonly Action<string> locate;
 
     /// <summary>构建规范阅读窗口；所有证据来自传入快照，不执行自动重构。</summary>
     /// <param name="report">当前报告，也可为空以浏览规范。</param>
+    /// <param name="standards">规范原文端口。</param>
     /// <param name="locate">把证据定位回主工作区的回调。</param>
-    public ArchitectureWindow(AnalysisReport? report, Action<string> locate)
+    public ArchitectureWindow(AnalysisReport? report, IStandardsReader standards, Action<string> locate)
     {
-        this.report = report; this.locate = locate;
+        this.report = report; this.standards = standards; this.locate = locate;
         Style = (Style)System.Windows.Application.Current.FindResource(typeof(Window));
         Title = "架构规范 · 现状与整理路线"; Width = 1120; Height = 800; MinWidth = 850; MinHeight = 560;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -71,7 +73,7 @@ public sealed class ArchitectureWindow : Window
         detail.Children.Add(Text(assessment.Label, 21, true));
         var markdown = new Button { Content = "对应 Markdown：" + assessment.Rule.MarkdownPath, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 12) };
         markdown.Click += (_, _) => new Window { Owner = this, Title = assessment.Rule.MarkdownPath, Width = 820, Height = 650, MinWidth = 400, MinHeight = 300, WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = new TextBox { Text = ArchitectureGuide.ReadMarkdown(assessment.Rule.Id), IsReadOnly = true, TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Consolas"), FontSize = 14,
+            Content = new TextBox { Text = standards.ReadMarkdown(assessment.Rule.Id), IsReadOnly = true, TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Consolas"), FontSize = 14,
                 Margin = new Thickness(20), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled } }.Show();
         detail.Children.Add(markdown);
         detail.Children.Add(Text(assessment.Status, 14, true));

@@ -38,6 +38,7 @@ public static partial class Program
             await ExpansionCases();
             RegistrationCases();
             await ModuleCompatibilityCases(temporary, root);
+            DriftCases();
             await InventoryCases(temporary);
             await SelfCases(root, Path.Combine(temporary, "self-reports"));
             ConformanceCases(root);
@@ -396,7 +397,7 @@ public static partial class Program
 
     private static async Task SelfCases(string root, string reportDirectory)
     {
-        var analyzer = new AnalyzeRepository(new SourceRepository(), Indexer, Rules);
+        var analyzer = new AnalyzeRepository(new SourceRepository(), Indexer, Rules, new TargetModelReader());
         AnalysisReport report = await analyzer.AnalyzeAsync(new("self", "Code Atlas · 自身源码", root));
         AnalysisFinding[] errors = report.Findings.Where(item => item.Severity == FindingSeverity.Error).ToArray();
         Check(errors.Length == 0, "self analysis has no known boundary errors: " + string.Join("; ", errors.Select(item => item.Message)));
@@ -404,7 +405,10 @@ public static partial class Program
         AnalysisFinding[] strictHits = report.Findings.Where(item => strict.Contains(item.Rule)).ToArray();
         Check(strictHits.Length == 0, "self analysis has no false positives from strict new rules: " + string.Join(" | ", strictHits.Select(item => item.Rule + " " + item.Source.Path + ":" + item.Source.Line + " " + item.Message)));
         AnalysisFinding[] retained = report.Findings.Where(item => item.Rule is "AT105" or "AT118").ToArray();
-        Passed.Add("self retained evidence: " + (retained.Length == 0 ? "(none)" : string.Join(" | ", retained.Select(item => item.Rule + "@" + item.Source.Path + ":" + item.Source.Line))));
+        Check(retained.Length == 0, "self analysis has no AT105 or AT118: " + string.Join(" | ", retained.Select(item => item.Rule + "@" + item.Source.Path + ":" + item.Source.Line)));
+        string[] drift = ["AT122", "AT123", "AT124", "AT125", "AT126", "AT127"];
+        AnalysisFinding[] driftHits = report.Findings.Where(item => drift.Contains(item.Rule)).ToArray();
+        Check(driftHits.Length == 0, "self target model matches the source graph: " + string.Join(" | ", driftHits.Select(item => item.Rule + " " + item.Message).Take(12)));
         Note(report.Findings);
         Check(report.Coverage.CSharpFiles >= 15 && report.Coverage.UnclassifiedSymbols == 0, "self source has explicit roles including regression tests");
         Check(report.Findings.Any(item => item.Severity == FindingSeverity.Unsupported), "self unsupported semantics remain visible");
@@ -512,6 +516,60 @@ public static partial class Program
             public sealed class Vm {}
             public sealed class Startup { public void Wire(IServiceCollection services) => services.AddScoped<Vm>(); }
             """, "AT118", "container registration outside AddAtlas stays explicit");
+        Lacks("""
+            using Microsoft.Extensions.DependencyInjection;
+            [assembly:AtlasFeature("tests","测试","回归",Kind=FeatureKind.Module)]
+            [assembly:AtlasModule("tests","测试",ArchitecturalRole.Test)]
+            public sealed class Vm {}
+            public sealed class Startup { public void Wire(IServiceCollection services) => services.AddSingleton<Vm>(); }
+            """, "AT118", "test project registration is not product composition");
+    }
+
+    private static void DriftCases()
+    {
+        SourceLocation at = new("fixture.cs", 4, 4);
+        CodeNode Node(string id, string name, string feature, ArchitecturalRole role, string kind = "type") =>
+            new(id, name, name, kind, null, feature, role, EffectKind.Unspecified, at, at, "explicit");
+        FeatureDefinition Feature(string id, string? parent = null, FeatureKind kind = FeatureKind.Module) =>
+            new(id, id, "用途", parent, kind, "", "", at);
+        TargetModule Module(string id, string? parent = null, string[]? dependencies = null, string[]? implementations = null, string[]? provides = null) =>
+            new(id, id, "负责人", "领域", parent, true,
+                provides?.Select(item => new TargetCapability(item, item, "1.0")).ToImmutableArray() ?? [],
+                [], dependencies?.ToImmutableArray() ?? [], implementations?.ToImmutableArray() ?? []);
+        TargetArchitecture Model(params TargetModule[] modules) =>
+            new(1, "likec4", new("demo", "示例", "负责人", "领域"), [], modules.ToImmutableArray(), []);
+        SourceGraph Graph(CodeNode[] nodes, CodeRelation[] relations, FeatureDefinition[] features) =>
+            new([], nodes.ToImmutableArray(), relations.ToImmutableArray(), [], [], features.ToImmutableArray());
+
+        CodeNode quote = Node("T:Quote", "Quote", "sales", ArchitecturalRole.Feature);
+        CodeNode stock = Node("T:Stock", "Stock", "stock", ArchitecturalRole.Feature);
+        CodeNode port = Node("T:IQuote", "IQuote", "sales", ArchitecturalRole.Contract, "interface");
+        var features = new[] { Feature("sales"), Feature("stock") };
+        var aligned = Graph([quote, stock, port],
+            [new(quote.Id, stock.Id, RelationKind.Invocation, at, "调用"), new(quote.Id, port.Id, RelationKind.ProvidesContract, at, "提供")],
+            features);
+        Note(TargetDriftRules.Evaluate(aligned, null));
+        Check(TargetDriftRules.Evaluate(aligned, null).All(item => item.Rule == "AT122" && item.Severity == FindingSeverity.Unsupported),
+            "missing target model is unknown and is not a pass");
+        Check(!TargetDriftRules.Evaluate(aligned, Model(Module("sales", dependencies: ["stock"], implementations: ["IQuote"]), Module("stock"))).Any(),
+            "declared dependency and capability produce no drift");
+        Note(TargetDriftRules.Evaluate(aligned, Model(Module("sales"), Module("stock"))));
+        Check(TargetDriftRules.Evaluate(aligned, Model(Module("sales"), Module("stock"))).Any(item => item.Rule == "AT125"),
+            "cross-module call without a declared dependency is drift");
+        var extra = Graph([quote], [], [Feature("sales"), Feature("extra")]);
+        Note(TargetDriftRules.Evaluate(extra, Model(Module("sales"))));
+        Check(TargetDriftRules.Evaluate(extra, Model(Module("sales"))).Any(item => item.Rule == "AT123"),
+            "module present in code but absent from the model is drift");
+        Note(TargetDriftRules.Evaluate(Graph([quote], [], [Feature("sales")]), Model(Module("sales"), Module("ghost"))));
+        Check(TargetDriftRules.Evaluate(Graph([quote], [], [Feature("sales")]), Model(Module("sales"), Module("ghost"))).Any(item => item.Rule == "AT124"),
+            "module present in the model but absent from code is drift");
+        Note(TargetDriftRules.Evaluate(Graph([quote], [], features), Model(Module("sales", implementations: ["IMissing"]), Module("stock"))));
+        Check(TargetDriftRules.Evaluate(Graph([quote], [], features), Model(Module("sales", implementations: ["IMissing"]), Module("stock"))).Any(item => item.Rule == "AT126"),
+            "declared capability without AtlasProvides is drift");
+        var undeclared = Graph([quote, port], [new(quote.Id, port.Id, RelationKind.ProvidesContract, at, "提供")], features);
+        Note(TargetDriftRules.Evaluate(undeclared, Model(Module("sales"), Module("stock"))));
+        Check(TargetDriftRules.Evaluate(undeclared, Model(Module("sales"), Module("stock"))).Any(item => item.Rule == "AT127"),
+            "AtlasProvides implementation missing from the model is drift");
     }
 
     private static void ConformanceCases(string root)

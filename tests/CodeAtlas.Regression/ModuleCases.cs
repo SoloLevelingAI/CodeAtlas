@@ -111,6 +111,23 @@ public static partial class Program
         var index = new ReportIndex(vm.Workspace.Report);
         Check(index.Report.SchemaVersion == 1 && JsonSerializer.Serialize(index.Report) == before,
             "existing ReportIndex and module browsing preserve legacy schema 1 report exactly");
+        TargetArchitecture architecture = TargetModelReader.Parse(File.ReadAllText(Path.Combine(rootDirectory, "docs/architecture/target-model.json")));
+        string[] runtimeIds = architecture.Modules.Where(module => module.Runtime).Select(module => module.Id).Order(StringComparer.Ordinal).ToArray();
+        string[] actualIds = webProfile.Modules.Select(module => module.Id).Order(StringComparer.Ordinal).ToArray();
+        Check(runtimeIds.SequenceEqual(actualIds), "LikeC4 runtime modules match the resolved web profile: " + string.Join(",", actualIds));
+        foreach (TargetModule expected in architecture.Modules.Where(module => module.Runtime))
+        {
+            ModuleDescriptor descriptor = webProfile.Modules.Single(module => module.Id == expected.Id);
+            string[] expectedDependencies = expected.Dependencies.Where(runtimeIds.Contains).Order(StringComparer.Ordinal).ToArray();
+            string[] actualDependencies = descriptor.Dependencies.Select(item => item.Id).Order(StringComparer.Ordinal).ToArray();
+            string[] expectedProvides = expected.Provides.Select(item => item.Id + " " + item.Contract + " " + item.Version).Order(StringComparer.Ordinal).ToArray();
+            string[] actualProvides = descriptor.Provides.Select(item => item.Id + " " + item.ContractType.FullName + " " + item.Version).Order(StringComparer.Ordinal).ToArray();
+            string[] expectedRequires = expected.Requires.Select(item => item.Id + " " + item.Contract + " " + item.Version + " " + item.Optional).Order(StringComparer.Ordinal).ToArray();
+            string[] actualRequires = descriptor.Requires.Select(item => item.Id + " " + item.ContractType.FullName + " " + item.MinimumVersion + " " + item.Optional).Order(StringComparer.Ordinal).ToArray();
+            Check(descriptor.ParentId == expected.Parent && expectedDependencies.SequenceEqual(actualDependencies) &&
+                expectedProvides.SequenceEqual(actualProvides) && expectedRequires.SequenceEqual(actualRequires),
+                "registry descriptor matches LikeC4 module " + expected.Id);
+        }
         string fixtureDirectory = Path.Combine(rootDirectory, "tests", "fixtures");
         string fixturePath = Path.Combine(fixtureDirectory, "legacy-no-features.json");
         byte[] original = await File.ReadAllBytesAsync(fixturePath);

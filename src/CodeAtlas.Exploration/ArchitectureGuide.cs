@@ -21,16 +21,6 @@ public sealed class ArchitectureGuide
         return JsonSerializer.Deserialize<ArchitectureGuide>(stream) ?? throw new InvalidDataException("架构规范内容为空。");
     }
 
-    /// <summary>读取与当前规范 ID 一一对应、随应用发布的 Markdown 原文。</summary>
-    public static string ReadMarkdown(string id)
-    {
-        if (!Load().Rules.Any(r => r.Id == id)) throw new KeyNotFoundException("未知规范 ID：" + id);
-        using Stream stream = typeof(ArchitectureGuide).Assembly.GetManifestResourceStream("CodeAtlas.Standards." + id + ".md")
-            ?? throw new InvalidOperationException("缺少规范 Markdown：" + id);
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
-    }
-
     /// <summary>把真实诊断映射到规范；无证据与未实现检查都不能变成通过。</summary>
     /// <param name="report">带原始覆盖和限制的报告；为空时只展示规范。</param>
     /// <returns>每项规范的诊断数量、有限证据和保守判断。</returns>

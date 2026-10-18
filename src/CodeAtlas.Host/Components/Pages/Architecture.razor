@@ -1,0 +1,184 @@
+@page "/architecture"
+@using CodeAtlas.Contracts
+@using CodeAtlas.Exploration
+@inject IExplorerWorkspace WorkspacePort
+@inject NavigationManager Nav
+
+<ReadingChrome Page="architecture" Title="架构视图" Summary="LikeC4 导出的图是主视图。旁边是漂移诊断和代码地图证据。没有模型不是通过。" Workspace="workspace" ReportChanged="ChangeReport">
+    @if (error is not null)
+    {
+        <div class="error-banner">@error</div>
+    }
+    else if (workspace is null)
+    {
+        <div class="loading">正在读取报告与目标模型…</div>
+    }
+    else if (Model is null)
+    {
+        <div id="architecture-page" class="stack" data-c4-level="unknown">
+            <div class="note">这份报告没有目标模型。对照结果是未知，不能把空白当成架构已经对齐。</div>
+            @foreach (AnalysisFinding finding in Drift)
+            {
+                <div class="relation" data-drift-rule="@finding.Rule"><b>@finding.Rule</b><span class="description">@finding.Message</span></div>
+            }
+        </div>
+    }
+    else
+    {
+        <div id="architecture-page" data-c4-level="@level" data-c4-host="@(hostId ?? "")" data-c4-module="@(moduleId ?? "")">
+            <div class="c4-levels">
+                <button type="button" id="c4-system" class="@(level == "system" ? "active" : "")" @onclick="ShowSystem">系统</button>
+                <button type="button" id="c4-host" class="@(level == "host" ? "active" : "")" @onclick="ShowHost" disabled="@(level == "system")">宿主</button>
+                <button type="button" id="c4-module" class="@(level == "module" ? "active" : "")" @onclick="ShowModule" disabled="@(hostId is null)">模块</button>
+                <button type="button" id="c4-code" class="@(level == "code" ? "active" : "")" @onclick="ShowCode" disabled="@(moduleId is null)">代码</button>
+            </div>
+            <div class="c4-layout">
+                <figure class="c4-diagram">
+                    @if (level == "code")
+                    {
+                        <figcaption id="c4-code-caption">代码层打开报告里的源码证据，不再另画一张调用图。</figcaption>
+                    }
+                    else
+                    {
+                        <img id="c4-diagram" src="@DiagramSrc" alt="@DiagramTitle" data-c4-diagram="@DiagramView" />
+                        <figcaption>@DiagramTitle · 由 LikeC4 从 docs/architecture 导出，不是手绘示意图。 <a href="@DiagramSrc" target="_blank" rel="noopener">打开原图</a></figcaption>
+                    }
+                </figure>
+                <section class="panel">
+                    <div class="panel-head"><strong>@SideTitle</strong><span>@Model.System.Name · @Model.System.Owner / @Model.System.Domain</span></div>
+                    <div class="scroll-list">
+                        @if (level == "system")
+                        {
+                            @foreach (TargetHost item in Model.Hosts)
+                            {
+                                <button type="button" class="entry" data-host="@item.Id" @onclick="() => OpenHost(item.Id)">
+                                    <b>@item.Name</b><span>@item.Technology · @item.Owner / @item.Domain</span>
+                                </button>
+                            }
+                        }
+                        else if (level is "host" or "module" && CurrentHost is { } currentHost)
+                        {
+                            @foreach (TargetModule item in HostModules(currentHost))
+                            {
+                                <button type="button" class="entry @(item.Id == moduleId ? "selected" : "")" data-module="@item.Id" @onclick="() => OpenModule(item.Id)">
+                                    <b>@item.Name</b><span>@item.Id · @item.Owner / @item.Domain</span>
+                                </button>
+                            }
+                        }
+                        else if (level == "code" && CurrentModule is { } current)
+                        {
+                            <div class="note">@current.Name 的负责人是 @current.Owner，领域是 @current.Domain。下面的链接回到代码地图，不把模型箭头当成调用证据。</div>
+                            @if (ModuleHref(current) is { } href)
+                            {
+                                <a class="evidence-link" id="c4-code-link" href="@href">在代码地图中查看此模块</a>
+                            }
+                        }
+                        <h3>漂移</h3>
+                        @if (!VisibleDrift.Any())
+                        {
+                            <div class="note" id="c4-drift-empty">这一层没有 AT122–AT127。没有诊断只说明模型与当前图没有这几条已知差异，不是认证通过。</div>
+                        }
+                        @foreach (AnalysisFinding finding in VisibleDrift)
+                        {
+                            string? href = EvidenceLocator.MapHref(workspace.Report.Id, finding.NodeId, finding.Source.Path, finding.Source.Line, workspace.Report.Graph);
+                            <div class="relation" data-drift-rule="@finding.Rule">
+                                <b>@finding.Rule · @finding.Severity</b>
+                                <span class="description">@finding.Message</span>
+                                <small>@finding.Source.Path:@finding.Source.Line</small>
+                                @if (href is not null)
+                                {
+                                    <a class="evidence-link" href="@href">在代码地图中查看</a>
+                                }
+                            </div>
+                        }
+                    </div>
+                </section>
+            </div>
+        </div>
+    }
+</ReadingChrome>
+
+@code {
+    [SupplyParameterFromQuery(Name = "report")] public string? ReportId { get; set; }
+    private ExplorerWorkspace? workspace;
+    private string? error;
+    private string level = "system";
+    private string? hostId;
+    private string? moduleId;
+    private int loadVersion;
+    private string? loadedQuery;
+
+    private TargetArchitecture? Model => workspace?.Report.Target;
+    private IEnumerable<AnalysisFinding> Drift => workspace?.Report.Findings.Where(finding => finding.Rule is "AT122" or "AT123" or "AT124" or "AT125" or "AT126" or "AT127") ?? [];
+    private IEnumerable<AnalysisFinding> VisibleDrift => level == "module" && moduleId is not null
+        ? Drift.Where(finding => finding.Message.Contains(moduleId, StringComparison.Ordinal))
+        : Drift;
+    private TargetHost? CurrentHost => Model?.Hosts.FirstOrDefault(item => item.Id == hostId);
+    private TargetModule? CurrentModule => Model?.Modules.FirstOrDefault(item => item.Id == moduleId);
+    private string DiagramView => level switch
+    {
+        "host" when hostId is not null && Model!.Views.Any(view => view.Id == "host-" + hostId) => "host-" + hostId,
+        "module" => "component",
+        "host" => "container",
+        _ => "context"
+    };
+    private string DiagramSrc => "/" + (Model!.Views.FirstOrDefault(view => view.Id == DiagramView)?.Diagram ?? "architecture/" + DiagramView + ".png");
+    private string DiagramTitle => Model!.Views.FirstOrDefault(view => view.Id == DiagramView)?.Title ?? DiagramView;
+    private string SideTitle => level switch
+    {
+        "host" => CurrentHost?.Name ?? "宿主",
+        "module" or "code" => CurrentModule?.Name ?? "模块",
+        _ => "选择宿主"
+    };
+
+    private IEnumerable<TargetModule> HostModules(TargetHost host)
+    {
+        var roots = host.Modules.ToHashSet(StringComparer.Ordinal);
+        return Model!.Modules.Where(module =>
+            (roots.Contains(module.Id) || roots.Contains(RootModule(module))) &&
+            (module.Id != "atlas.explore.map" || roots.Contains(module.Id)));
+    }
+
+    private string RootModule(TargetModule module)
+    {
+        string current = module.Id;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (Model!.Modules.FirstOrDefault(item => item.Id == current)?.Parent is { } parent && seen.Add(current)) current = parent;
+        return current;
+    }
+
+    private string? ModuleHref(TargetModule module)
+    {
+        FeatureDefinition? feature = workspace!.Report.Graph.Features.FirstOrDefault(item => item.Id == module.Id);
+        return feature is null ? null : EvidenceLocator.MapHref(workspace.Report.Id, null, feature.Source.Path, feature.Source.Line, workspace.Report.Graph);
+    }
+
+    private void ShowSystem() { level = "system"; hostId = null; moduleId = null; }
+    private void ShowCode() { if (moduleId is not null) level = "code"; }
+    private void ShowHost() { if (hostId is not null) level = "host"; }
+    private void ShowModule() { if (moduleId is not null) level = "module"; else if (hostId is not null) level = "host"; }
+    private void OpenHost(string id) { hostId = id; moduleId = null; level = "host"; }
+    private void OpenModule(string id) { moduleId = id; level = "module"; }
+    private void ChangeReport(string id) => Nav.NavigateTo("/architecture?report=" + Uri.EscapeDataString(id));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedQuery == ReportId && workspace is not null) return;
+        int version = ++loadVersion;
+        try
+        {
+            ExplorerWorkspace loaded = await WorkspacePort.LoadAsync(string.IsNullOrWhiteSpace(ReportId) ? null : ReportId);
+            if (version != loadVersion) return;
+            workspace = loaded;
+            error = null;
+            loadedQuery = ReportId;
+            ShowSystem();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (version != loadVersion) return;
+            error = ex.Message;
+            workspace = null;
+        }
+    }
+}

@@ -2,6 +2,7 @@
 @using CodeAtlas.Contracts
 @using CodeAtlas.Exploration
 @inject IExplorerWorkspace WorkspacePort
+@inject IStandardsReader StandardsReader
 @inject NavigationManager Nav
 
 <ReadingChrome Page="standards" Title="架构规范" Summary="要求、自动检查范围、映射规则和保守判断。没有诊断不等于通过。" Workspace="workspace" ReportChanged="ChangeReport">
@@ -57,7 +58,7 @@
                                 <button type="button" class="source-toggle" @onclick="() => showMarkdown = !showMarkdown">@(showMarkdown ? "收起 Markdown 原文" : "查看 Markdown 原文")</button>
                                 @if (showMarkdown)
                                 {
-                                    <pre class="markdown">@ArchitectureGuide.ReadMarkdown(assessment.Rule.Id)</pre>
+                                    <pre class="markdown">@StandardsReader.ReadMarkdown(assessment.Rule.Id)</pre>
                                 }
                                 <h3>当前证据：@assessment.EvidenceCount 条（显示前 @assessment.Evidence.Length 条）</h3>
                                 @if (assessment.EvidenceCount == 0)

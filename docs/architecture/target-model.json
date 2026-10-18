@@ -1,0 +1,312 @@
+{
+  "schema": 1,
+  "format": "likec4",
+  "system": {
+    "id": "codeatlas",
+    "name": "CodeAtlas",
+    "owner": "架构",
+    "domain": "代码阅读"
+  },
+  "hosts": [
+    {
+      "id": "cli",
+      "name": "CLI 宿主",
+      "technology": ".NET",
+      "owner": "命令行",
+      "domain": "宿主",
+      "modules": [
+        "atlas.analysis",
+        "atlas.reports"
+      ]
+    },
+    {
+      "id": "desktop",
+      "name": "Desktop 宿主",
+      "technology": "WPF",
+      "owner": "桌面",
+      "domain": "宿主",
+      "modules": [
+        "atlas.analysis",
+        "atlas.explore",
+        "atlas.reports"
+      ]
+    },
+    {
+      "id": "web",
+      "name": "Web 宿主",
+      "technology": "ASP.NET Core",
+      "owner": "Web",
+      "domain": "宿主",
+      "modules": [
+        "atlas.analysis",
+        "atlas.explore",
+        "atlas.explore.map",
+        "atlas.reports"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "id": "atlas.analysis",
+      "name": "源码分析",
+      "owner": "分析",
+      "domain": "分析",
+      "parent": null,
+      "runtime": true,
+      "provides": [
+        {
+          "id": "atlas.analysis",
+          "contract": "CodeAtlas.Contracts.IAnalysisService",
+          "version": "1.0"
+        },
+        {
+          "id": "atlas.sources",
+          "contract": "CodeAtlas.Contracts.ISourceRepository",
+          "version": "1.0"
+        },
+        {
+          "id": "atlas.csharp",
+          "contract": "CodeAtlas.Contracts.ICodeIndexer",
+          "version": "1.0"
+        },
+        {
+          "id": "atlas.rules",
+          "contract": "CodeAtlas.Contracts.IArchitectureRules",
+          "version": "1.0"
+        },
+        {
+          "id": "atlas.target-model",
+          "contract": "CodeAtlas.Contracts.ITargetModelSource",
+          "version": "1.0"
+        }
+      ],
+      "requires": [],
+      "dependencies": [
+        "atlas.foundation",
+        "atlas.quality"
+      ],
+      "implementations": [
+        "CodeAtlas.Contracts.IAnalysisService",
+        "CodeAtlas.Contracts.ISourceRepository",
+        "CodeAtlas.Contracts.ICodeIndexer",
+        "CodeAtlas.Contracts.ITargetModelSource"
+      ]
+    },
+    {
+      "id": "atlas.explore",
+      "name": "代码探索",
+      "owner": "探索",
+      "domain": "探索",
+      "parent": null,
+      "runtime": true,
+      "provides": [
+        {
+          "id": "atlas.workspace",
+          "contract": "CodeAtlas.Contracts.IExplorerWorkspace",
+          "version": "1.0"
+        }
+      ],
+      "requires": [
+        {
+          "id": "atlas.reports",
+          "contract": "CodeAtlas.Contracts.IReportRepository",
+          "version": "1.0",
+          "optional": false
+        },
+        {
+          "id": "atlas.analysis",
+          "contract": "CodeAtlas.Contracts.IAnalysisService",
+          "version": "1.0",
+          "optional": false
+        }
+      ],
+      "dependencies": [
+        "atlas.analysis",
+        "atlas.foundation",
+        "atlas.quality",
+        "atlas.reports",
+        "atlas.runtime"
+      ],
+      "implementations": [
+        "CodeAtlas.Contracts.IExplorerWorkspace",
+        "CodeAtlas.Contracts.IScreenshotExport"
+      ]
+    },
+    {
+      "id": "atlas.explore.index",
+      "name": "报告索引",
+      "owner": "探索",
+      "domain": "索引",
+      "parent": "atlas.explore",
+      "runtime": true,
+      "provides": [],
+      "requires": [],
+      "dependencies": [],
+      "implementations": []
+    },
+    {
+      "id": "atlas.explore.map",
+      "name": "功能地图页",
+      "owner": "Web",
+      "domain": "视图",
+      "parent": "atlas.explore",
+      "runtime": true,
+      "provides": [
+        {
+          "id": "atlas.standards-reader",
+          "contract": "CodeAtlas.Contracts.IStandardsReader",
+          "version": "1.0"
+        }
+      ],
+      "requires": [
+        {
+          "id": "atlas.workspace",
+          "contract": "CodeAtlas.Contracts.IExplorerWorkspace",
+          "version": "1.0",
+          "optional": false
+        }
+      ],
+      "dependencies": [],
+      "implementations": []
+    },
+    {
+      "id": "atlas.explore.navigation",
+      "name": "管理探索状态",
+      "owner": "探索",
+      "domain": "导航",
+      "parent": "atlas.explore",
+      "runtime": true,
+      "provides": [],
+      "requires": [],
+      "dependencies": [],
+      "implementations": []
+    },
+    {
+      "id": "atlas.explore.navigation.history",
+      "name": "恢复浏览位置",
+      "owner": "探索",
+      "domain": "历史",
+      "parent": "atlas.explore.navigation",
+      "runtime": true,
+      "provides": [],
+      "requires": [],
+      "dependencies": [],
+      "implementations": []
+    },
+    {
+      "id": "atlas.foundation",
+      "name": "共享基础",
+      "owner": "基础",
+      "domain": "共享契约",
+      "parent": null,
+      "runtime": false,
+      "provides": [],
+      "requires": [],
+      "dependencies": [],
+      "implementations": []
+    },
+    {
+      "id": "atlas.quality",
+      "name": "质量检查",
+      "owner": "质量",
+      "domain": "质量",
+      "parent": null,
+      "runtime": false,
+      "provides": [],
+      "requires": [],
+      "dependencies": [
+        "atlas.analysis",
+        "atlas.foundation"
+      ],
+      "implementations": [
+        "CodeAtlas.Contracts.IArchitectureRules",
+        "CodeAtlas.Contracts.IStandardsReader"
+      ]
+    },
+    {
+      "id": "atlas.reports",
+      "name": "报告管理",
+      "owner": "报告",
+      "domain": "报告",
+      "parent": null,
+      "runtime": true,
+      "provides": [
+        {
+          "id": "atlas.reports",
+          "contract": "CodeAtlas.Contracts.IReportRepository",
+          "version": "1.0"
+        },
+        {
+          "id": "atlas.report-reader",
+          "contract": "CodeAtlas.Contracts.IReportFileReader",
+          "version": "1.0"
+        }
+      ],
+      "requires": [],
+      "dependencies": [
+        "atlas.analysis",
+        "atlas.foundation"
+      ],
+      "implementations": [
+        "CodeAtlas.Contracts.IReportRepository",
+        "CodeAtlas.Contracts.IReportFileReader"
+      ]
+    },
+    {
+      "id": "atlas.runtime",
+      "name": "运行与组装",
+      "owner": "运行",
+      "domain": "组装",
+      "parent": null,
+      "runtime": false,
+      "provides": [],
+      "requires": [],
+      "dependencies": [
+        "atlas.analysis",
+        "atlas.explore",
+        "atlas.foundation",
+        "atlas.quality",
+        "atlas.reports"
+      ],
+      "implementations": []
+    }
+  ],
+  "views": [
+    {
+      "id": "context",
+      "title": "系统上下文",
+      "level": "system",
+      "diagram": "architecture/context.png"
+    },
+    {
+      "id": "container",
+      "title": "容器：宿主",
+      "level": "host",
+      "diagram": "architecture/container.png"
+    },
+    {
+      "id": "component",
+      "title": "组件：模块",
+      "level": "module",
+      "diagram": "architecture/component.png"
+    },
+    {
+      "id": "host-desktop",
+      "title": "Desktop 宿主",
+      "level": "host",
+      "diagram": "architecture/host-desktop.png"
+    },
+    {
+      "id": "host-web",
+      "title": "Web 宿主",
+      "level": "host",
+      "diagram": "architecture/host-web.png"
+    },
+    {
+      "id": "host-cli",
+      "title": "CLI 宿主",
+      "level": "host",
+      "diagram": "architecture/host-cli.png"
+    }
+  ]
+}

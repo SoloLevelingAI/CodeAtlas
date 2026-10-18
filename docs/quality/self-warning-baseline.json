@@ -1,0 +1,7 @@
+{
+  "description": "本仓库 check 的警告上限。AT012 与 AT017 是既有结构说明缺口。新警告规则或条数增加会使退出码变为 5；条数减少可以通过。不使用 --require-structured。",
+  "warnings": {
+    "AT012": 149,
+    "AT017": 208
+  }
+}

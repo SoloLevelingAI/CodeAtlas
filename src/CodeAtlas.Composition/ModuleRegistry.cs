@@ -43,7 +43,7 @@ public sealed class ModuleRegistry
                 throw new InvalidOperationException($"能力 {capability.Id} 必须接入且只接入一个服务：{capability.ContractType.Name}。");
         if (staged.Any(service => service.ServiceType == typeof(ResolvedProfile)))
             throw new InvalidOperationException("服务集合已经应用过 Profile。");
-        staged.AddSingleton(resolved);
+        staged.AddResolvedProfile(resolved);
         services.Clear();
         foreach (ServiceDescriptor service in staged) services.Add(service);
         return resolved;

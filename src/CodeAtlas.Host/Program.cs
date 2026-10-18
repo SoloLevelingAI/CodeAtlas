@@ -26,7 +26,7 @@ public static class Program
             }
             if (args.FirstOrDefault() is "help" or "--help")
             {
-                Console.WriteLine("CodeAtlas analyze|check --root <repository> --id <report-id> [--name <label>] [--reports <folder>] [--require-complete] [--require-structured]\nCodeAtlas serve --reports <folder> --urls http://127.0.0.1:5278\nExit: 0 analyzed; 2 quality errors; 3 incomplete support; 4 structure/documentation gaps; 64 unsupported command/option.");
+                Console.WriteLine("CodeAtlas analyze|check --root <repository> --id <report-id> [--name <label>] [--reports <folder>] [--target <model.json>] [--warnings-baseline <file>] [--require-complete] [--require-structured]\nCodeAtlas serve --reports <folder> --urls http://127.0.0.1:5278\nExit: 0 analyzed; 2 quality errors; 3 incomplete support; 4 structure/documentation gaps; 5 new warnings; 64 unsupported command/option.");
                 return 0;
             }
             if (args.FirstOrDefault() != "serve")
@@ -47,7 +47,7 @@ public static class Program
             app.UseAntiforgery();
             app.Use(async (context, next) =>
             {
-                if (profile.Views.IsEmpty && (context.Request.Path.StartsWithSegments("/standards") || context.Request.Path.StartsWithSegments("/division")))
+                if (profile.Views.IsEmpty && (context.Request.Path.StartsWithSegments("/standards") || context.Request.Path.StartsWithSegments("/division") || context.Request.Path.StartsWithSegments("/architecture")))
                 { context.Response.StatusCode = 404; return; }
                 await next(context);
             });
@@ -90,7 +90,7 @@ public static class Program
                 complete = true;
                 continue;
             }
-            if (key is not ("--root" or "--reports" or "--id" or "--name") || index + 1 >= args.Length)
+            if (key is not ("--root" or "--reports" or "--id" or "--name" or "--target" or "--warnings-baseline") || index + 1 >= args.Length)
             {
                 throw new NotSupportedException("暂不支持或缺少参数的选项：" + key);
             }
@@ -106,18 +106,29 @@ public static class Program
         Configure(services, reportDirectory);
         using ServiceProvider provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
         AnalysisReport report = await provider.GetRequiredService<IAnalysisService>().AnalyzeAsync(new(id,
-            options.GetValueOrDefault("--name") ?? Path.GetFileName(Path.GetFullPath(root)), root));
+            options.GetValueOrDefault("--name") ?? Path.GetFileName(Path.GetFullPath(root)), root, options.GetValueOrDefault("--target")));
         await provider.GetRequiredService<IReportRepository>().SaveAsync(report);
         int errors = report.Findings.Count(finding => finding.Severity == FindingSeverity.Error);
         int unsupported = report.Findings.Count(finding => finding.Severity == FindingSeverity.Unsupported);
         int structureGaps = report.Findings.Count(finding => finding.Rule is "AT001" or "AT010" or "AT011" or "AT012" or "AT014" or "AT015" or "AT016" or "AT017");
-        Console.WriteLine(JsonSerializer.Serialize(new { report.Id, report.Coverage, Errors = errors, Unsupported = unsupported,
+        int warnings = report.Findings.Count(finding => finding.Severity == FindingSeverity.Warning);
+        Console.WriteLine(JsonSerializer.Serialize(new { report.Id, report.Coverage, Errors = errors, Warnings = warnings, Unsupported = unsupported,
             StructureGaps = structureGaps, Structure = structureGaps == 0 ? "no-known-structure-gaps" : "needs-attention",
             Quality = errors == 0 ? "no-known-boundary-violations" : "failed", Completeness = unsupported == 0 && report.Coverage.UnclassifiedSymbols == 0 ? "declared-source-view" : "partial",
+            Target = report.Target is null ? "unknown" : report.Target.System.Id,
             Report = Path.GetFullPath(Path.Combine(reportDirectory, id + ".json")) }));
         if (errors > 0)
         {
             return 2;
+        }
+        if (options.TryGetValue("--warnings-baseline", out string? baseline))
+        {
+            IReadOnlyList<string> extra = WarningBaseline.Compare(report, File.ReadAllText(baseline));
+            if (extra.Count > 0)
+            {
+                Console.Error.WriteLine(string.Join(Environment.NewLine, extra));
+                return 5;
+            }
         }
         if (complete && (unsupported > 0 || report.Coverage.UnclassifiedSymbols > 0)) return 3;
         return structured && structureGaps > 0 ? 4 : 0;
