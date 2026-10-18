@@ -10,6 +10,7 @@ using CodeAtlas.Composition;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace CodeAtlas.Host;
 
@@ -34,16 +35,22 @@ public static class Program
             }
 
             WebApplicationBuilder builder = WebApplication.CreateBuilder(args[1..]);
+            builder.Host.UseDefaultServiceProvider(options => { options.ValidateOnBuild = true; options.ValidateScopes = true; });
             builder.WebHost.UseUrls(builder.Configuration["urls"] ?? "http://127.0.0.1:5278");
             builder.WebHost.UseStaticWebAssets();
             string reportDirectory = builder.Configuration["reports"] ?? Path.Combine(Environment.CurrentDirectory, "artifacts", "reports");
-            Configure(builder.Services, reportDirectory);
-            builder.Services.AddScoped<GraphExplorerViewModel>();
+            ResolvedProfile profile = WebModules.Configure(builder.Services, reportDirectory, builder.Configuration["profile"] ?? "web");
             builder.Services.AddRazorComponents().AddInteractiveServerComponents();
             WebApplication app = builder.Build();
             app.UseStaticFiles();
             app.MapStaticAssets();
             app.UseAntiforgery();
+            app.Use(async (context, next) =>
+            {
+                if (profile.Views.IsEmpty && (context.Request.Path.StartsWithSegments("/standards") || context.Request.Path.StartsWithSegments("/division")))
+                { context.Response.StatusCode = 404; return; }
+                await next(context);
+            });
             app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
             await app.RunAsync();
             return 0;
@@ -62,12 +69,7 @@ public static class Program
 
     private static void Configure(IServiceCollection services, string reportDirectory)
     {
-        services.AddAtlas<IReportRepository, JsonReportRepository>(_ => new JsonReportRepository(reportDirectory))
-            .AddAtlas<ISourceRepository, SourceRepository>()
-            .AddAtlas<ICodeIndexer, CSharpIndexer>()
-            .AddAtlas<IArchitectureRules, ArchitectureRules>()
-            .AddAtlas<IAnalysisService, AnalyzeRepository>()
-            .AddAtlas<IExplorerWorkspace, ExplorerWorkspaceAdapter>();
+        CodeAtlas.Runtime.AtlasRuntime.CreateRegistry(reportDirectory).Apply(services, CodeAtlas.Runtime.AtlasRuntime.HeadlessProfile);
     }
 
     private static async Task<int> AnalyzeCommand(string[] args)

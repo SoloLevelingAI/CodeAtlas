@@ -1,3 +1,4 @@
+const atlasUrl=(route='/')=>{const url=new URL(route,process.env.ATLAS_URL||'http://127.0.0.1:5278');if(process.env.ATLAS_REPORT)url.searchParams.set('report',process.env.ATLAS_REPORT);return url.href;};
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -8,7 +9,7 @@ const fs=require('node:fs');
  page.on('pageerror',e=>errors.push(e.message));
  const check=(ok,label)=>{assert(ok,label);passed.push(label);console.log('PASS '+label);};
  try{
-  await page.goto('http://127.0.0.1:5278/standards',{waitUntil:'networkidle'});
+  await page.goto(atlasUrl('/standards'),{waitUntil:'networkidle'});
   await page.locator('#standards-page').waitFor();
   const rules=await page.locator('#rule-list [data-rule]').evaluateAll(nodes=>nodes.map(node=>node.dataset.rule));
   check(rules.join(',')==='A01,A02,A03,A04,A05,A06,A07,A08,A09,A10','standards lists A01 through A10');
@@ -38,7 +39,7 @@ const fs=require('node:fs');
   }else{
    passed.push('selected rule has no located evidence in this report');
   }
-  await page.goto('http://127.0.0.1:5278/division',{waitUntil:'networkidle'});
+  await page.goto(atlasUrl('/division'),{waitUntil:'networkidle'});
   await page.locator('#division-page').waitFor();
   const banner=await page.locator('#division-banner').innerText();
   check(banner.includes('待整理') || banner.includes('仍需人工确认') || banner.includes('证据不足') || banner.includes('交接受阻') || banner.includes('不是认证通过'),'division banner stays conservative');
@@ -58,7 +59,7 @@ const fs=require('node:fs');
    check((await page.locator('.inspector h1').innerText()).length>0,'handoff risk opens source evidence');
    await page.screenshot({path:'artifacts/CodeAtlas-division-evidence.png',fullPage:true});
   }
-  await page.goto('http://127.0.0.1:5278/',{waitUntil:'networkidle'});
+  await page.goto(atlasUrl(),{waitUntil:'networkidle'});
   check(await page.locator('#standards-link').isVisible() && await page.locator('#division-link').isVisible() && await page.locator('#structure-tree').isVisible(),'map keeps structure and links to both pages');
   check(errors.length===0,'no browser errors: '+errors.join(' | '));
   fs.mkdirSync('artifacts',{recursive:true});

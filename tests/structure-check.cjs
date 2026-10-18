@@ -1,3 +1,4 @@
+const atlasUrl=(route='/')=>{const url=new URL(route,process.env.ATLAS_URL||'http://127.0.0.1:5278');if(process.env.ATLAS_REPORT)url.searchParams.set('report',process.env.ATLAS_REPORT);return url.href;};
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -9,7 +10,7 @@ const fs=require('node:fs');
  const check=(ok,label)=>{assert(ok,label);passed.push(label);console.log('PASS '+label);};
  const expand=async key=>{await page.locator(`[data-tree-expand="${key}"]`).click();await page.waitForTimeout(80);};
  try{
-  await page.goto('http://127.0.0.1:5278',{waitUntil:'networkidle'});
+  await page.goto(atlasUrl(),{waitUntil:'networkidle'});
   check(await page.locator('#structure-tree').isVisible() && !await page.locator('#feature-map').isVisible(),'nested structure is default and diagram is opt-in');
   await page.screenshot({path:'artifacts/CodeAtlas-structure-overview.png',fullPage:true});
   const root='f:atlas.analysis', child=root+'/f:atlas.analysis.inventory';

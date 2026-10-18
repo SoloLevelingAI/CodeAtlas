@@ -1,3 +1,4 @@
+const atlasUrl=(route='/')=>{const url=new URL(route,process.env.ATLAS_URL||'http://127.0.0.1:5278');if(process.env.ATLAS_REPORT)url.searchParams.set('report',process.env.ATLAS_REPORT);return url.href;};
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -12,7 +13,7 @@ const fs = require('node:fs');
  const branch=id=>page.locator(`#feature-map [data-map-feature="${id}"]`);
  const expand=async node=>{await node.locator('[data-expand]').click();await page.waitForTimeout(80);};
  try {
-  await page.goto('http://127.0.0.1:5278',{waitUntil:'networkidle'});
+  await page.goto(atlasUrl(),{waitUntil:'networkidle'});
     await page.locator('#diagram-mode').click();
   const initial=await nodes();
   check(initial.length===6,'canvas starts with six retained module roots');

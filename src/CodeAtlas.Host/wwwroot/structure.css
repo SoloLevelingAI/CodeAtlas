@@ -13,3 +13,7 @@
 @media(max-width:700px){.workbench{grid-template-columns:1fr}.branch-kind{display:none}.branch-heading{padding-left:8px;padding-right:8px}.branch-children{margin-left:13px;padding-left:8px}.structure-tree{padding:12px}.branch-title{font-size:13px}}
 .workbench.compact-directory{grid-template-columns:minmax(420px,1.35fr) minmax(350px,1fr)}.compact-directory .structure-tree{padding:18px 25px}.compact-directory .module-card>.branch-heading{padding-top:17px}.compact-directory .branch-purpose{font-size:12px}.compact-directory .branch-heading{padding-right:17px}.compact-directory .branch-meta{padding-bottom:14px}.compact-directory .overview-map{justify-content:space-between}.compact-directory #overview-map{max-width:420px}.map-path #toggle-directory{margin-left:auto}
 @media(max-width:1050px){.workbench.compact-directory{grid-template-columns:1fr}.compact-directory .map{height:740px}}
+.module-mode-switch { margin: 12px 18px 0; flex-wrap: wrap; }
+.overview-map > .runtime-roots { display: flex; width: auto; flex: 1; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.runtime-roots button { min-width: 92px; white-space: nowrap; padding: 10px 12px; }
+#runtime-module-details .support p, #runtime-module-details b { overflow-wrap: anywhere; }

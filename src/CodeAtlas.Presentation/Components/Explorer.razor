@@ -34,15 +34,22 @@
                 @if (Vm.CurrentClass is { } currentClass) { <span>›</span><button class="crumb" @onclick="() => ChangeAsync(() => Vm.Select(currentClass.Id))">@currentClass.Name</button> }
                 <div class="searchbox"><span>⌕</span><input id="search" value="@Vm.State.Query" @oninput="Search" placeholder="@(Vm.CurrentFeature is null ? "按用途、名称或文件搜索" : "在当前功能内搜索")" /><button @onclick='() => Vm.SetQuery("")'>×</button></div>
             </div>
-            <div class="workbench @(!diagramMode && !showDirectory && Vm.State.Panel == "graph" ? "compact-directory" : "")">
+            <div class="workbench @(runtimeMode || !diagramMode && !showDirectory && Vm.State.Panel == "graph" ? "compact-directory" : "")">
                 <section class="map panel">
                     <div class="panel-head focus-heading"><div class="section-eyebrow">01 / ARCHITECTURE</div><strong>功能结构</strong><span>从模块到实现，在同一处展开理解。</span></div>
+                    @if (RuntimeProfile is not null)
+                    {
+                        <div class="module-mode-switch view-segments" aria-label="地图数据来源">
+                            <button id="source-modules" aria-pressed="@(!runtimeMode)" class="@(!runtimeMode ? "active" : "")" @onclick="() => runtimeMode = false">报告中的源码功能</button>
+                            <button id="runtime-modules" aria-pressed="@runtimeMode" class="@(runtimeMode ? "active" : "")" @onclick="() => runtimeMode = true">运行模块 · @RuntimeProfile.Id</button>
+                        </div>
+                    }
                     <div class="map-path"><div class="view-segments"><button id="structure-mode" class="@(!diagramMode ? "active" : "")" aria-pressed="@(!diagramMode)" @onclick="() => diagramMode = false">嵌套结构</button><button id="diagram-mode" class="@(diagramMode ? "active" : "")" aria-pressed="@diagramMode" @onclick="() => diagramMode = true">关系连线</button></div><button id="toggle-directory" aria-pressed="@showDirectory" @onclick="() => showDirectory = !showDirectory">@(showDirectory ? "收起目录" : "代码目录")</button><button id="collapse-map" @onclick="Tree.CollapseAll">收起全部</button></div>
                     <div id="structure-tree" class="structure-tree" hidden="@diagramMode">
-                        <div class="structure-intro"><span class="live-dot"></span> @Vm.RootFeatures.Length 个模块 <span>独立展开 · 按需溯源</span></div>
+                        <div class="structure-intro"><span class="live-dot"></span> @(runtimeMode ? RuntimeProfile!.Modules.Count(module => module.ParentId is null) : Vm.RootFeatures.Length) 个模块 <span>@(runtimeMode ? "本次启动注册 · 能力与视图" : "独立展开 · 按需溯源")</span></div>
                         @foreach (MapBranch root in Tree.Branches.Where(branch => branch.ParentKey is null))
                         {
-                            <BranchCard @key="root.Key" Tree="Tree" Branch="root" SelectedSymbol="@Vm.State.SelectedId" SelectedFeature="@Vm.State.FeatureId" OnToggle="Tree.Toggle" OnSelect="SelectBranch" OnMore="Tree.More" OnRelation="index => ChangeAsync(() => Vm.SelectRelation(index))" />
+                            <BranchCard @key="(runtimeMode, root.Key)" Tree="Tree" Branch="root" SelectedSymbol="@(runtimeMode ? null : Vm.State.SelectedId)" SelectedFeature="@SelectedFeatureId" OnToggle="Tree.Toggle" OnSelect="SelectBranch" OnMore="Tree.More" OnRelation="index => ChangeAsync(() => Vm.SelectRelation(index))" />
                         }
                     </div>
                     <div class="map-canvas" hidden="@(!diagramMode)">
@@ -58,7 +65,7 @@
                                 }
                                 @foreach (MapBranch branch in Tree.Branches)
                                 {
-                                    <g @key="branch.Key" class="map-node @((branch.Node.SymbolId is not null && branch.Node.SymbolId == Vm.State.SelectedId) || (branch.Node.FeatureId is not null && branch.Node.FeatureId == Vm.State.FeatureId && Vm.Selected is null) ? "selected" : "")" data-map-id="@branch.Key" data-map-feature="@branch.Node.FeatureId" data-map-symbol="@branch.Node.SymbolId" transform="translate(@branch.X @branch.Y)">
+                                    <g @key="(runtimeMode, branch.Key)" class="map-node @((!runtimeMode && branch.Node.SymbolId is not null && branch.Node.SymbolId == Vm.State.SelectedId) || (branch.Node.FeatureId is not null && branch.Node.FeatureId == SelectedFeatureId && (runtimeMode || Vm.Selected is null)) ? "selected" : "")" data-map-id="@branch.Key" data-map-feature="@branch.Node.FeatureId" data-map-symbol="@branch.Node.SymbolId" transform="translate(@branch.X @branch.Y)">
                                         <g class="node-select" role="button" tabindex="0" @onclick="() => SelectBranch(branch)" @onclick:stopPropagation @onkeydown="(KeyboardEventArgs e) => SelectBranchKey(e, branch)">
                                             <title>@branch.Node.Name · @branch.Node.Purpose</title><rect width="252" height="92" rx="12" /><text x="16" y="22" class="node-meta">@branch.Node.Kind · @(Tree.ChildCount(branch) > 0 ? $"{Tree.ChildCount(branch)} 个下级" : "末级 · 查看详情")</text><text x="16" y="48" class="node-title">@ShortLabel(branch.Node.Name, 21)</text><text x="16" y="73" class="node-sub">@ShortLabel(branch.Node.Purpose, 34)</text>
                                         </g>
@@ -77,7 +84,16 @@
                             </g>
                         </svg>
                     </div>
-                    <div class="map-bottom" hidden="@(!diagramMode)"><div class="map-legend"><button id="toggle-dependencies" aria-pressed="@showDependencies" @onclick="() => showDependencies = !showDependencies">@(showDependencies ? "隐藏依赖" : "显示依赖")</button><span>┄ 归属　→ 依赖</span></div><div class="map-controls"><button id="zoom-out" @onclick="() => Zoom(-.1)">−</button><button id="map-fit" @onclick="() => mapViewport = new()">重置视野</button><button id="zoom-in" @onclick="() => Zoom(.1)">＋</button></div></div>
+                    <div class="map-bottom" hidden="@(!diagramMode)"><div class="map-legend">@if (!runtimeMode) { <button id="toggle-dependencies" aria-pressed="@showDependencies" @onclick="() => showDependencies = !showDependencies">@(showDependencies ? "隐藏依赖" : "显示依赖")</button> }<span>@(runtimeMode ? "┄ 显式逻辑父级" : "┄ 归属　→ 依赖")</span></div><div class="map-controls"><button id="zoom-out" @onclick="() => Zoom(-.1)">−</button><button id="map-fit" @onclick="() => mapViewport = new()">重置视野</button><button id="zoom-in" @onclick="() => Zoom(.1)">＋</button></div></div>
+                    @if (runtimeMode)
+                    {
+                        <div class="overview-map"><div><b>运行模块索引</b><span>当前 Profile 的根模块</span></div><div class="runtime-roots">
+                            @foreach (ModuleDescriptor module in RuntimeProfile!.Modules.Where(module => module.ParentId is null))
+                            { <button data-runtime-root="@module.Id" @onclick="() => selectedModuleId = module.Id">@module.Name</button> }
+                        </div></div>
+                    }
+                    else
+                    {
                     <div class="overview-map"><div><b>全局小地图</b><span>当前位置始终保留<br />点击模块查看详情</span></div><svg id="overview-map" viewBox="@MiniViewBox" aria-label="全局模块小地图">
                         @foreach (FeatureConnection edge in Connections()) { <path class="mini-edge" d="@EdgePath(edge)" /> }
                         @foreach (FeaturePlacement place in Placements)
@@ -85,8 +101,9 @@
                             <g class="map-node @(Vm.State.FeatureId is not null && Vm.RootOf(Vm.State.FeatureId) == place.Feature.Id ? "selected focus" : "")" data-feature="@place.Feature.Id" transform="translate(@place.X @place.Y)" @onclick="() => ChangeAsync(() => Vm.SetFeature(place.Feature.Id))" tabindex="0" role="button" @onkeydown="(KeyboardEventArgs e) => OpenFeatureKey(e, place.Feature.Id)"><title>@place.Feature.Purpose</title><rect width="184" height="62" rx="9" /><text x="92" y="38" text-anchor="middle" class="node-title">@place.Feature.Name</text></g>
                         }
                     </svg></div>
+                    }
                 </section>
-                <section class="explorer panel" hidden="@(!diagramMode && !showDirectory && Vm.State.Panel == "graph")">
+                <section class="explorer panel" hidden="@(runtimeMode || !diagramMode && !showDirectory && Vm.State.Panel == "graph")">
                     <div class="panel-head"><strong>02 / @PageTitle</strong><span class="page-purpose">@PagePurpose</span></div>
                     @if (Vm.State.Panel == "graph")
                     {
@@ -130,7 +147,11 @@
                 </section>
                 <section class="inspector panel"><div class="detail-head"><span>03 / 用途、上下文与证据</span><button id="pin" disabled="@(Vm.Selected is null)" @onclick="Vm.TogglePin">@(Vm.State.SelectedId is { } selected && Vm.Pins.Contains(selected) ? "★ 已固定" : "☆ 固定")</button></div>
                     <div class="detail-body" id="detail-body">
-                        @if (Finding is { } finding)
+                        @if (runtimeMode && RuntimeProfile is not null)
+                        {
+                            <RuntimeModuleDetails Profile="@RuntimeProfile" Module="@SelectedModule" />
+                        }
+                        else if (Finding is { } finding)
                         {
                             <span class="badge amber">@finding.Rule · @finding.Severity</span><h1>@(finding.Severity == FindingSeverity.Unsupported ? "明确暂不支持" : RuleName(finding.Rule))</h1><p class="description purpose-text">@finding.Message</p><div class="note">问题与修改建议来自声明和源码检查。原始位置保留；缺失信息不会被自动猜测填补。</div>
                         }
@@ -168,11 +189,11 @@
                             <h3>推荐浏览路径</h3><p class="description">源码分析 → 盘点源码 → SourceRepository → ReadAsync<br />报告管理 → 读写报告快照 → JsonReportRepository → SaveAsync<br />代码探索 → 功能地图页 → Explorer</p>
                             <h3>支持能力与限制</h3>@foreach (SupportStatement support in Report.Support) { <div class="support"><b>@support.Capability <i>@support.Status</i></b><p>@support.Detail</p></div> }
                         }
-                        @if (Source is { Path.Length: > 0 } source)
+                        @if (!runtimeMode && Source is { Path.Length: > 0 } source)
                         {
                             <h3>源码 · 原始位置</h3><div class="source-label">@source.Path : @source.Line</div><div class="code" id="source-code">@foreach (var line in SourceLines()) { <div class="code-line @(line.Number == source.Line ? "current" : "")"><span>@line.Number</span><code>@line.Text</code></div> }</div><button class="source-toggle" @onclick="Vm.ToggleFullSource">@(Vm.State.FullSource ? "只看附近" : "展开完整文件")</button>
                         }
-                        @if (Vm.Selected is not null && Finding is null)
+                        @if (!runtimeMode && Vm.Selected is not null && Finding is null)
                         {
                             <h3>直接关系 · 最多展示 30 个不同目标</h3>
                             @foreach (CodeRelation edge in SelectedRelations()) { int index = Report.Graph.Relations.IndexOf(edge); <button class="relation" @onclick="() => ChangeAsync(() => Vm.SelectRelation(index))"><b>@NodeName(edge.From) → @NodeName(edge.To)</b><small>@KindName(edge.Kind) · @edge.Source.Path : @edge.Source.Line</small></button> }

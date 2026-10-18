@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/CodeAtlas.Host/CodeAtlas.Host.csproj" />
     <ProjectReference Include="../../src/CodeAtlas.Application/CodeAtlas.Application.csproj" />
     <ProjectReference Include="../../src/CodeAtlas.Analysis.Core/CodeAtlas.Analysis.Core.csproj" />
     <ProjectReference Include="../../src/CodeAtlas.Storage/CodeAtlas.Storage.csproj" />

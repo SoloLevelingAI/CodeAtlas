@@ -15,7 +15,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CodeAtlas.Regression;
 
-public static class Program
+public static partial class Program
 {
     private static readonly CSharpIndexer Indexer = new();
     private static readonly ArchitectureRules Rules = new();
@@ -37,8 +37,9 @@ public static class Program
             await FocusMapCases();
             await ExpansionCases();
             RegistrationCases();
+            await ModuleCompatibilityCases(temporary, root);
             await InventoryCases(temporary);
-            await SelfCases(root);
+            await SelfCases(root, Path.Combine(temporary, "self-reports"));
             ConformanceCases(root);
             Console.WriteLine(JsonSerializer.Serialize(new { Status = "passed", Assertions = Passed.Count, Passed }, new JsonSerializerOptions { WriteIndented = true }));
             return 0;
@@ -393,7 +394,7 @@ public static class Program
         Note(snapshot.InventoryFindings);
     }
 
-    private static async Task SelfCases(string root)
+    private static async Task SelfCases(string root, string reportDirectory)
     {
         var analyzer = new AnalyzeRepository(new SourceRepository(), Indexer, Rules);
         AnalysisReport report = await analyzer.AnalyzeAsync(new("self", "Code Atlas · 自身源码", root));
@@ -413,7 +414,7 @@ public static class Program
         Check(report.Graph.Relations.Where(edge => edge.From == vm.Id || nodes[edge.From].ParentId == vm.Id)
             .All(edge => nodes[edge.To].Role is ArchitecturalRole.Presentation or ArchitecturalRole.Contract or ArchitecturalRole.Framework), "self ViewModel depends only on interaction contracts and declarations");
         Check(report.Graph.Relations.All(edge => nodes.ContainsKey(edge.From) && nodes.ContainsKey(edge.To)), "self graph has no dangling relations");
-        await new JsonReportRepository(Path.Combine(root, "artifacts", "reports")).SaveAsync(report);
+        await new JsonReportRepository(reportDirectory).SaveAsync(report);
     }
 
     private const string RegistrationHost = """

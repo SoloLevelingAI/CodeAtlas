@@ -1,0 +1,30 @@
+@namespace CodeAtlas.Presentation.Components
+<div id="runtime-module-details" data-module-id="@Module?.Id">
+    <span class="badge green">启动 Profile：@Profile.Id</span>
+    <h1>@(Module?.Name ?? "当前运行模块")</h1>
+    <p class="purpose-text">@(Module?.Purpose ?? "选择左侧模块，查看已启用的能力、嵌套关系和视图贡献。")</p>
+    <div class="note">来源：本次启动通过 ModuleRegistry / ProfileResolver 校验的注册声明。它描述 CodeAtlas 宿主，不代表当前报告的被分析仓库；原始报告保持原样。</div>
+    @if (Module is { } module)
+    {
+        <div class="facts"><div><span>模块标识</span><b>@module.Id</b></div><div><span>版本</span><b>@module.Version</b></div><div><span>逻辑父级</span><b>@(module.ParentId ?? "根模块")</b></div></div>
+        <h3>提供能力</h3>
+        @foreach (CapabilityContract capability in module.Provides)
+        { <div class="support" data-provided-capability="@capability.Id"><b>@capability.Id · @capability.Version</b><p>@capability.ContractType.Name</p></div> }
+        @if (module.Provides.IsEmpty) { <p class="description">此逻辑子模块没有独立服务端口。</p> }
+        <h3>需要能力</h3>
+        @foreach (CapabilityRequirement requirement in module.Requires)
+        { <div class="support" data-required-capability="@requirement.Id"><b>@requirement.Id · ≥ @requirement.MinimumVersion</b><p>@requirement.ContractType.Name · @(requirement.Optional ? "可选" : "必需") · 限同主版本</p></div> }
+        @if (module.Requires.IsEmpty) { <p class="description">没有独立声明的能力依赖；父级接线仍有效。</p> }
+        <h3>视图贡献</h3>
+        @foreach (ViewContribution view in module.Views)
+        { <div class="support" data-view-contribution="@view.Id"><b>@view.Label · @view.Id</b><p>@view.Slot → @view.Renderer<br />数据：@view.DataCapability</p></div> }
+        @if (module.Views.IsEmpty) { <p class="description">未贡献宿主视图。</p> }
+    }
+    <div class="note">已启用 @Profile.Modules.Length 个逻辑模块、@Profile.Views.Length 个视图。启动校验覆盖父级、依赖、能力版本与接线；DLL 分发闭包和运行时热卸载尚未验证。</div>
+    @foreach (string missing in Profile.UnavailableOptionalCapabilities) { <div class="note">可选能力未启用：@missing</div> }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ResolvedProfile Profile { get; set; } = default!;
+    [Parameter] public ModuleDescriptor? Module { get; set; }
+}

@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <ItemGroup>
+    <ProjectReference Include="../CodeAtlas.Runtime/CodeAtlas.Runtime.csproj" />
     <ProjectReference Include="../CodeAtlas.Composition/CodeAtlas.Composition.csproj" />
     <ProjectReference Include="../CodeAtlas.Analysis.Core/CodeAtlas.Analysis.Core.csproj" />
     <ProjectReference Include="../CodeAtlas.Storage/CodeAtlas.Storage.csproj" />

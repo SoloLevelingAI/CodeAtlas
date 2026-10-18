@@ -10,8 +10,10 @@ public sealed record MapBranch(string Key, FocusNode Node, string? ParentKey, st
 
 /// <summary>保存原地展开的分支与布局，独立于右侧目录和详情的浏览路径。</summary>
 [AtlasComponent("atlas.explore.map", ArchitecturalRole.Presentation)]
-public sealed class ExpandableMap(GraphExplorerViewModel navigation)
+public sealed class ExpandableMap(GraphExplorerViewModel navigation, ResolvedProfile? runtimeProfile = null)
 {
+    /// <summary>运行模块来自已解析的启动 Profile，不能冒充被分析仓库的源码事实。</summary>
+    public bool IsRuntime => runtimeProfile is not null;
     private AnalysisReport? report;
     private readonly Dictionary<string, MapBranch> placed = [];
     private readonly Dictionary<string, ImmutableArray<FocusNode>> children = [];
@@ -20,13 +22,24 @@ public sealed class ExpandableMap(GraphExplorerViewModel navigation)
     private ImmutableArray<MapBranch> visible = [];
     private ImmutableArray<FocusEdge> edges = [];
     private bool dirty = true;
+    private bool bound;
 
     /// <summary>只在报告更换时重置画布；选择与搜索不影响现有展开分支。</summary>
     public void Bind()
     {
-        if (ReferenceEquals(report, navigation.Workspace?.Report)) return;
+        if (bound && (runtimeProfile is not null || ReferenceEquals(report, navigation.Workspace?.Report))) return;
+        bound = true;
         report = navigation.Workspace?.Report;
         placed.Clear(); children.Clear(); expanded.Clear(); limits.Clear(); dirty = true;
+        if (runtimeProfile is not null)
+        {
+            foreach (ModuleDescriptor root in runtimeProfile.Modules.Where(module => module.ParentId is null))
+            {
+                FocusNode node = ModuleNode(root);
+                placed[node.Id] = new(node.Id, node, null, root.Id, 0, 20, 24 + placed.Count * 112);
+            }
+            return;
+        }
         foreach (FeatureDefinition root in navigation.RootFeatures)
         {
             var node = FeatureNode(root);
@@ -72,6 +85,7 @@ public sealed class ExpandableMap(GraphExplorerViewModel navigation)
     public void CollapseAll() { expanded.Clear(); dirty = true; }
 
     private static FocusNode FeatureNode(FeatureDefinition feature) => new("f:" + feature.Id, feature.Name, feature.Purpose, feature.Id, null, "功能");
+    private static FocusNode ModuleNode(ModuleDescriptor module) => new("f:" + module.Id, module.Name, module.Purpose, module.Id, null, "运行模块 " + module.Version);
     private static FocusNode SymbolNode(CodeNode node) => new("s:" + node.Id, node.Name,
         string.IsNullOrWhiteSpace(node.Summary) ? "用途未说明 · 查看源码" : node.Summary, null, node.Id,
         node.Kind is "type" or "interface" ? "类型 / 契约" : "成员 · 查看详情");
@@ -79,6 +93,11 @@ public sealed class ExpandableMap(GraphExplorerViewModel navigation)
     private ImmutableArray<FocusNode> Children(MapBranch branch)
     {
         if (children.TryGetValue(branch.Key, out var cached)) return cached;
+        if (runtimeProfile is not null)
+        {
+            children[branch.Key] = runtimeProfile.Modules.Where(module => module.ParentId == branch.Node.FeatureId).Select(ModuleNode).ToImmutableArray();
+            return children[branch.Key];
+        }
         if (report is null) return [];
         var result = new List<FocusNode>();
         if (branch.Node.FeatureId is { } feature)
@@ -119,7 +138,7 @@ public sealed class ExpandableMap(GraphExplorerViewModel navigation)
         Bind();
         if (!dirty) return;
         visible = placed.Values.Where(branch => Ancestors(branch).Skip(1).All(parent => expanded.Contains(parent.Key))).ToImmutableArray();
-        if (report is null) { edges = []; dirty = false; return; }
+        if (report is null || runtimeProfile is not null) { edges = []; dirty = false; return; }
         var symbolOwners = visible.Where(branch => branch.Node.SymbolId is not null).GroupBy(branch => branch.Node.SymbolId!)
             .ToDictionary(group => group.Key, group => group.OrderByDescending(branch => branch.Depth).ToArray());
         var featureOwners = visible.Where(branch => branch.Node.FeatureId is not null).GroupBy(branch => branch.Node.FeatureId!)

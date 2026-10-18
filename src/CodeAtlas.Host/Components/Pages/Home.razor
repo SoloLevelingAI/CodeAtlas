@@ -1,5 +1,13 @@
 @page "/"
-<Explorer InitialReportId="@Report" InitialNodeId="@Node" InitialFile="@File" InitialLine="@(Line ?? 0)" />
+@inject ResolvedProfile Profile
+@if (Profile.Views.Any(view => view.Slot == "web.main" && view.Renderer == "atlas.explorer"))
+{
+    <Explorer RuntimeProfile="@Profile" InitialReportId="@Report" InitialNodeId="@Node" InitialFile="@File" InitialLine="@(Line ?? 0)" />
+}
+else
+{
+    <main class="loading" id="profile-without-view">当前 Profile：@Profile.Id。未启用 Web 探索视图。分析与报告能力可通过 CLI 使用。</main>
+}
 
 @code {
     [SupplyParameterFromQuery(Name = "report")] public string? Report { get; set; }

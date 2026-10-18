@@ -1,0 +1,15 @@
+{
+  "SchemaVersion": 1,
+  "Id": "legacy-no-features",
+  "Name": "Synthetic schema 1 compatibility fixture",
+  "Root": "fixture",
+  "AnalyzedAt": "2026-01-01T00:00:00Z",
+  "Graph": {
+    "Documents": [{"Path":"legacy.cs","Project":"legacy.csproj","Language":".cs","Text":"public class Legacy {}"}],
+    "Nodes": [{"Id":"T:Legacy","Name":"Legacy","Symbol":"Legacy","Kind":"type","ParentId":null,"Feature":"","Role":null,"Effect":"Unspecified","Source":{"Path":"legacy.cs","Line":1,"EndLine":1},"Declaration":null,"DeclarationBasis":"unclassified","HasBehavior":false,"Summary":"","Inputs":"","Outputs":""}],
+    "Relations": [], "Effects": [], "Findings": []
+  },
+  "Coverage": {"Files":1,"CSharpFiles":1,"UnsupportedFiles":0,"Symbols":1,"DeclaredSymbols":0,"UnclassifiedSymbols":1,"ResolvedRelations":0},
+  "Findings": [],
+  "Support": []
+}
