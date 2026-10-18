@@ -19,6 +19,8 @@
 
 规范源文件是 [docs/standards/A01.md](docs/standards/A01.md) 到 [A10.md](docs/standards/A10.md)，每项对应一个软件条目，可在窗口查看 Markdown 原文。修改后运行 `python scripts/sync-architecture.py` 生成应用资源；本地构建和 GitHub CI 用 `--check` 阻止文档与软件内容漂移。
 
+[架构条目与源码对应表](docs/code-map.md) 进一步列出每个功能的实现文件、端口、适用规范和当前边界，便于从 MD 直接追到代码。
+
 [LaunchDesk 示例说明](examples/launchdesk/README.md)：从固定 Git 提交读取原始源码，额外提供明确标为人工整理的功能归属；保留全部原始关系、覆盖与问题，不修改 LaunchDesk。若存在该阅读报告，启动脚本优先展示它。
 
 桌面移除了含义模糊的左侧导航。目录与详情之间可拖动调宽，双击分隔条恢复默认；源码摘录和独立阅读窗口默认换行，不需要横向滚动。功能入口分别为“分析仓库”“打开历史报告”“架构规范”“问题与限制”和所选元素的“查看源码摘录（只读）”。
