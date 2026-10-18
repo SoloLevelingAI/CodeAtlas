@@ -101,7 +101,8 @@ public sealed partial class GraphExplorerViewModel
     {
         if (id is not null && !Features.Any(feature => feature.Id == id)) throw new ArgumentException("功能不在当前目录中。", nameof(id));
         Navigate(State with { FeatureId = id, ClassId = null, SelectedId = null, FindingIndex = null, RelationIndex = null,
-            Scope = null, Query = "", Panel = "graph", Page = 0, MapPage = 0, Viewport = (State.Viewport ?? new()) with { ListScroll = 0, DetailScroll = 0 } });
+            Scope = null, Query = "", Panel = "graph", Page = 0, MapPage = 0, FocusPath = null, FocusLine = 0,
+            Viewport = (State.Viewport ?? new()) with { ListScroll = 0, DetailScroll = 0 } });
     }
 
     /// <summary>沿显式结构返回：成员回到类型，类型回到功能，功能回到父功能。</summary>

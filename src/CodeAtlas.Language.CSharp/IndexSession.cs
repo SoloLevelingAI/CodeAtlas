@@ -74,11 +74,19 @@ internal sealed partial class IndexSession(SourceSnapshot snapshot, CSharpCompil
                 SeparatedSyntaxList<AttributeArgumentSyntax> arguments = attribute.ArgumentList?.Arguments ?? default;
                 if (arguments.Count != 3)
                 {
+                    findings.Add(new("AT111", FindingSeverity.Unsupported,
+                        "模块声明参数不完整或无法静态读取；不能把该项目视为已登记模块。", Location(attribute)));
                     continue;
                 }
                 string? feature = model.GetConstantValue(arguments[0].Expression, cancellationToken).Value as string;
                 object? roleValue = model.GetConstantValue(arguments[2].Expression, cancellationToken).Value;
                 ArchitecturalRole? role = ParseRole(roleValue, attribute);
+                if (string.IsNullOrWhiteSpace(feature) || !features.Any(item => item.Id == feature))
+                {
+                    findings.Add(new("AT111", FindingSeverity.Warning,
+                        $"模块默认归属 {feature ?? "[缺失]"} 没有对应的 AtlasFeature。模块清单至少要有可解析的稳定 ID；版本、能力和分发闭包不能据此判为已通过。",
+                        Location(attribute)));
+                }
                 string project = documents[tree.FilePath].Project;
                 if (!modules.TryAdd(project, new(feature ?? "[未声明]", role, Location(attribute), "module")))
                 {
@@ -114,7 +122,21 @@ internal sealed partial class IndexSession(SourceSnapshot snapshot, CSharpCompil
                 IPropertySymbol => "property", IEventSymbol => "event", _ => "field"
             };
             var documentation = ReadDocumentation(symbol, syntax, cancellationToken);
-            nodes.TryAdd(id, new(id, symbol.Name, symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat), kind,
+            string displayed = symbol.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+            string suffix = symbol switch
+            {
+                INamedTypeSymbol namedType => TypeSignatureSuffix(namedType),
+                IMethodSymbol => "",
+                IPropertySymbol property => property.Type.ToDisplayString(),
+                IFieldSymbol field => field.Type.ToDisplayString(),
+                IEventSymbol declarationEvent => declarationEvent.Type.ToDisplayString(),
+                _ => ""
+            };
+            if (suffix.Length > 0)
+            {
+                displayed = displayed + " · " + suffix;
+            }
+            nodes.TryAdd(id, new(id, symbol.Name, displayed, kind,
                 symbol.ContainingType is { } parent ? Key(parent) : null, declaration.Feature, declaration.Role,
                 effect, Location(syntax), declaration.Source, declaration.Basis, HasBehavior(syntax), documentation.Summary, documentation.Inputs, documentation.Outputs));
         }
@@ -196,6 +218,14 @@ internal sealed partial class IndexSession(SourceSnapshot snapshot, CSharpCompil
             {
                 relations.Add(new(provider, port, RelationKind.Registration, Location(syntax), Short(syntax)));
             }
+        }
+        if (method.Name is "AddSingleton" or "AddScoped" or "AddTransient" &&
+            method.ContainingNamespace.ToDisplayString() == "Microsoft.Extensions.DependencyInjection" &&
+            !(nodes.TryGetValue(owner, out CodeNode? site) && site.Symbol.Contains("CodeAtlas.Composition.AtlasRegistration", StringComparison.Ordinal)))
+        {
+            findings.Add(new("AT118", FindingSeverity.Warning,
+                "发现未经过 AddAtlas 的容器注册。不能确认 AtlasProvides，也不能据此判断模块已经可拆装。",
+                Location(syntax), owner));
         }
     }
 
@@ -307,10 +337,49 @@ internal sealed partial class IndexSession(SourceSnapshot snapshot, CSharpCompil
         return type is "System.IO.File" or "System.IO.Directory" or "System.IO.FileStream" or
             "System.IO.FileInfo" or "System.IO.DirectoryInfo" or "System.IO.StreamReader" or "System.IO.StreamWriter" or
             "System.Net.Sockets.TcpClient" or "System.Net.Sockets.Socket" or "System.Net.Http.HttpClient" or "System.Net.Dns" ||
+            type is "System.Data.Common.DbConnection" or "System.Data.Common.DbCommand" or "System.Data.SqlClient.SqlConnection" or
+            "Microsoft.Data.SqlClient.SqlConnection" or "Microsoft.Data.Sqlite.SqliteConnection" or "Microsoft.EntityFrameworkCore.DbContext" ||
             type == "System.Diagnostics.Process" && symbol.Name == "Start" ||
             type is "System.DateTime" or "System.DateTimeOffset" && symbol.Name is "Now" or "UtcNow" ||
             type == "System.Guid" && symbol.Name == "NewGuid" || type == "System.Random";
     }
+
+    /// <summary>把主构造参数和声明的基类型附到类型显示名上，供契约签名规则读取；不新增符号。</summary>
+    private static string TypeSignatureSuffix(INamedTypeSymbol named)
+    {
+        var parts = new List<string>();
+        foreach (IMethodSymbol constructor in named.InstanceConstructors)
+        {
+            if (constructor.Parameters.Length == 0 || !constructor.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax() is BaseTypeDeclarationSyntax))
+            {
+                continue;
+            }
+            foreach (IParameterSymbol parameter in constructor.Parameters)
+            {
+                if (!SymbolEqualityComparer.Default.Equals(parameter.Type, named))
+                {
+                    parts.Add(parameter.Type.ToDisplayString());
+                }
+            }
+        }
+        if (named.BaseType is { } baseType && !IsTrivialBase(baseType) && named.TypeKind != TypeKind.Interface)
+        {
+            parts.Add(baseType.ToDisplayString());
+        }
+        foreach (INamedTypeSymbol implemented in named.Interfaces)
+        {
+            if (named.BaseType is { } parent && parent.AllInterfaces.Any(candidate => SymbolEqualityComparer.Default.Equals(candidate, implemented)))
+            {
+                continue;
+            }
+            parts.Add(implemented.ToDisplayString());
+        }
+        return string.Join(" · ", parts.Distinct(StringComparer.Ordinal));
+    }
+
+    private static bool IsTrivialBase(INamedTypeSymbol type) => type.SpecialType is SpecialType.System_Object or SpecialType.System_ValueType
+        or SpecialType.System_Enum or SpecialType.System_Delegate or SpecialType.System_MulticastDelegate
+        || type.ToDisplayString() is "System.Object" or "System.ValueType" or "System.Enum" or "System.Delegate" or "System.MulticastDelegate" or "System.Attribute";
 
     private sealed record DeclarationInfo(string Feature, ArchitecturalRole? Role, SourceLocation? Source, string Basis);
 }

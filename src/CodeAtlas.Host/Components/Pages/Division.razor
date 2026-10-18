@@ -1,0 +1,137 @@
+@page "/division"
+@using CodeAtlas.Contracts
+@using CodeAtlas.Exploration
+@inject IExplorerWorkspace WorkspacePort
+@inject NavigationManager Nav
+
+<ReadingChrome Page="division" Title="分工视图" Summary="按功能内的职责看哪些切片可以认领，哪些被越界证据挡住。" Workspace="workspace" ReportChanged="ChangeReport">
+    @if (error is not null)
+    {
+        <div class="error-banner">@error</div>
+    }
+    else if (workspace is null || board is null)
+    {
+        <div class="loading">正在根据报告切分职责…</div>
+    }
+    else
+    {
+        <div id="division-page" class="stack">
+            <div id="division-banner" class="note">@board.Banner 当前报告：@board.ReportName。若报告目录里还有 LaunchDesk 阅读报告，用右上角切换；没有这份文件时不会把它算作通过。</div>
+            <div class="quality-stats">
+                <div><span>可先认领的切片</span><strong id="claimable-count">@board.ClaimableCount</strong></div>
+                <div><span>交接受阻</span><strong id="blocked-count">@board.BlockedCount</strong></div>
+                <div><span>待整理符号</span><strong id="inbox-count">@board.Inbox.SymbolCount</strong></div>
+                <div><span>未挂上的交接风险</span><strong>@board.Inbox.UnplacedCount</strong></div>
+            </div>
+            <p class="description">切片来自报告中的功能目录和每个符号声明的职责。数据访问与外部系统适配按声明分开，不合成一个适配角色。端口只统计切片内契约、提供声明、实际注册，以及指向契约的类型引用或调用。交接风险只挂 AT101、AT105、AT106、AT107、AT108、AT109、AT110、AT118、AT130。AT001、AT010 和职责或功能对不上的符号进入待整理。</p>
+            @{ int index = 0; }
+            @foreach (var group in board.Slices.GroupBy(slice => slice.FeatureId))
+            {
+                int position = index++;
+                bool open = group.Any(slice => slice.Status == DivisionBoard.Blocked) || position < 2;
+                <details class="slice" data-feature="@group.Key" open="@open">
+                    <summary>@group.First().FeaturePath <small>@group.Count() 个职责 · @group.Sum(slice => slice.NodeCount) 个符号</small></summary>
+                    <p class="description">@group.First().Purpose</p>
+                    @foreach (DivisionSlice slice in group)
+                    {
+                        <article class="slice-body" data-slice="@slice.Role">
+                            <span class="badge @(slice.Status == DivisionBoard.Blocked ? "amber" : "")">@slice.RoleLabel</span>
+                            <h2>@slice.Status</h2>
+                            <p class="purpose-text">@slice.Assignment · @slice.NodeCount 个符号</p>
+                            @if (slice.Symbols.Length > 0)
+                            {
+                                <p class="description">@string.Join("、", slice.Symbols)@(slice.NodeCount > slice.Symbols.Length ? $"，另有 {slice.NodeCount - slice.Symbols.Length} 个未列出" : "")</p>
+                            }
+                            @if (slice.SampleNodeId is { } sample && EvidenceLocator.MapHref(workspace.Report.Id, sample, "", 0, workspace.Report.Graph) is { } sampleHref)
+                            {
+                                <a class="relation" href="@sampleHref">在代码地图中打开一个符号 →</a>
+                            }
+                            <h3>端口与契约 · @slice.PortCount</h3>
+                            @if (slice.PortCount == 0)
+                            {
+                                <p class="description">这个切片没有声明或引用已索引的契约。这不是“不需要契约”的证明。</p>
+                            }
+                            else
+                            {
+                                @foreach (DivisionPort port in slice.Ports)
+                                {
+                                    <div class="relation"><b>@port.Kind · @port.Name</b><small>@port.Symbol</small></div>
+                                }
+                                @if (slice.PortCount > slice.Ports.Length)
+                                {
+                                    <p class="description">另有 @(slice.PortCount - slice.Ports.Length) 条契约关系未展开。</p>
+                                }
+                            }
+                            <h3>交接风险 · @slice.RiskCount</h3>
+                            @if (slice.RiskCount == 0)
+                            {
+                                <p class="description">没有挂在这个切片上的已知交接风险。</p>
+                            }
+                            @foreach (DivisionRisk risk in slice.Risks)
+                            {
+                                <EvidenceRow Risk="risk" Graph="@workspace.Report.Graph" ReportId="@workspace.Report.Id" />
+                            }
+                        </article>
+                    }
+                </details>
+            }
+            @if (board.Slices.Length == 0)
+            {
+                <div class="empty">没有已登记功能且职责明确的切片。先看下面的待整理，不要把空列表当成可以分派。</div>
+            }
+            <section id="inbox" class="slice">
+                <h2>待整理</h2>
+                <p class="purpose-text">@board.Inbox.Status · @board.Inbox.SymbolCount 个符号对不上功能目录或职责，@board.Inbox.FindingCount 条 AT001/AT010，@board.Inbox.UnplacedCount 条交接风险没有挂到切片。</p>
+                @if (board.Inbox.SymbolCount == 0 && board.Inbox.FindingCount == 0 && board.Inbox.UnplacedCount == 0)
+                {
+                    <div class="note">这份报告里没有落入待整理的符号或 AT001/AT010。这只说明索引到的符号都带了目录和职责，不是项目已经整理完成。</div>
+                }
+                @if (board.Inbox.Symbols.Length > 0)
+                {
+                    <p class="description">@string.Join("、", board.Inbox.Symbols)@(board.Inbox.SymbolCount > board.Inbox.Symbols.Length ? $"，另有 {board.Inbox.SymbolCount - board.Inbox.Symbols.Length} 个未列出" : "")</p>
+                }
+                @foreach (DivisionRisk finding in board.Inbox.Findings)
+                {
+                    <EvidenceRow Risk="finding" Graph="@workspace.Report.Graph" ReportId="@workspace.Report.Id" />
+                }
+                @foreach (DivisionRisk risk in board.Inbox.UnplacedRisks)
+                {
+                    <EvidenceRow Risk="risk" Graph="@workspace.Report.Graph" ReportId="@workspace.Report.Id" />
+                }
+            </section>
+        </div>
+    }
+</ReadingChrome>
+
+@code {
+    [SupplyParameterFromQuery(Name = "report")] public string? ReportId { get; set; }
+    private ExplorerWorkspace? workspace;
+    private DivisionReading? board;
+    private string? error;
+    private int loadVersion;
+    private string? loadedQuery;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedQuery == ReportId && workspace is not null) return;
+        int version = ++loadVersion;
+        try
+        {
+            ExplorerWorkspace loaded = await WorkspacePort.LoadAsync(string.IsNullOrWhiteSpace(ReportId) ? null : ReportId);
+            if (version != loadVersion) return;
+            workspace = loaded;
+            board = DivisionBoard.Read(loaded.Report);
+            error = null;
+            loadedQuery = ReportId;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (version != loadVersion) return;
+            error = ex.Message;
+            workspace = null;
+            board = null;
+        }
+    }
+
+    private void ChangeReport(string id) => Nav.NavigateTo("/division?report=" + Uri.EscapeDataString(id));
+}

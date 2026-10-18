@@ -14,6 +14,11 @@ public partial class Explorer : ComponentBase, IAsyncDisposable
 {
     [Inject] public GraphExplorerViewModel Vm { get; set; } = default!;
     [Inject] public IJSRuntime Js { get; set; } = default!;
+    [Parameter] public string? InitialReportId { get; set; }
+    [Parameter] public string? InitialNodeId { get; set; }
+    [Parameter] public string? InitialFile { get; set; }
+    [Parameter] public int InitialLine { get; set; }
+    private string? focusKey;
     private bool restorePending;
     private DotNetObjectReference<Explorer>? mapReference;
     private bool mapBound;
@@ -34,7 +39,9 @@ public partial class Explorer : ComponentBase, IAsyncDisposable
     private AnalysisReport? Report => Vm.Workspace?.Report;
     private AnalysisFinding? Finding => Vm.State.FindingIndex is { } index ? Report?.Findings[index] : null;
     private CodeRelation? Relation => Vm.State.RelationIndex is { } index ? Report?.Graph.Relations[index] : null;
-    private SourceLocation? Source => Finding?.Source ?? Relation?.Source ?? Vm.Selected?.Source ?? (Vm.State.Panel == "graph" ? Vm.CurrentFeature?.Source : null);
+    private SourceLocation? Source => Finding?.Source ?? Relation?.Source ?? Vm.Selected?.Source
+        ?? (Vm.State.FocusPath is { Length: > 0 } path ? new SourceLocation(path, Math.Max(1, Vm.State.FocusLine), Math.Max(1, Vm.State.FocusLine)) : null)
+        ?? (Vm.State.Panel == "graph" ? Vm.CurrentFeature?.Source : null);
     private string Transform => FormattableString.Invariant($"translate({mapViewport.X} {mapViewport.Y}) scale({mapViewport.Zoom})");
 
     private ImmutableArray<FeaturePlacement> Placements { get { EnsureMap(); return placementCache; } }
@@ -49,7 +56,29 @@ public partial class Explorer : ComponentBase, IAsyncDisposable
         _ => Vm.CurrentFeature?.Purpose ?? "先选择要理解的功能，逐层找到子功能、页面、类型与方法。每一层都有明确任务。"
     };
 
-    protected override async Task OnInitializedAsync() => await Vm.LoadAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        string key = (InitialReportId ?? "") + "|" + (InitialNodeId ?? "") + "|" + (InitialFile ?? "") + "|" + InitialLine;
+        if (focusKey == key && Vm.Workspace is not null)
+        {
+            return;
+        }
+        if (Vm.Workspace is null || (InitialReportId is not null && Vm.Workspace.Report.Id != InitialReportId))
+        {
+            await Vm.LoadAsync(string.IsNullOrWhiteSpace(InitialReportId) ? null : InitialReportId);
+        }
+        if (Vm.Workspace is null)
+        {
+            return;
+        }
+        focusKey = key;
+        if (!string.IsNullOrEmpty(InitialNodeId) || !string.IsNullOrEmpty(InitialFile))
+        {
+            Vm.FocusEvidence(string.IsNullOrEmpty(InitialNodeId) ? null : InitialNodeId, InitialFile, InitialLine);
+        }
+    }
+
+    private string PageHref(string path) => Vm.Workspace is null ? path : path + "?report=" + Uri.EscapeDataString(Vm.Workspace.Report.Id);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -164,7 +193,11 @@ public partial class Explorer : ComponentBase, IAsyncDisposable
         "AT012" => "用途说明缺失", "AT013" => "功能层级无效", "AT014" => "方法集合过于扁平",
         "AT015" => "页面输入输出不明", "AT016" => "文档格式错误", "AT017" => "输入输出未说明",
         "AT101" => "职责越层依赖", "AT102" => "核心包含外部作用", "AT103" => "纯计算声明冲突",
-        "AT104" => "契约包含实现", "AT200" => "未支持的文件类型", "AT205" => "运行时目标不可确认",
+        "AT104" => "契约包含实现", "AT105" => "交互直接外部作用", "AT106" => "契约签名暴露实现",
+        "AT107" => "用例直接外部作用", "AT108" => "注册缺少提供声明", "AT109" => "端口有多个提供方",
+        "AT110" => "提供方未见注册", "AT111" => "模块标识未登记", "AT118" => "容器注册未走组合入口",
+        "AT120" => "规则缺少反例", "AT121" => "规范映射不一致", "AT130" => "状态保存整图集合",
+        "AT200" => "未支持的文件类型", "AT205" => "运行时目标不可确认",
         "AT206" => "调用目标不可确认", "AT207" => "源码语义不完整", _ => "声明或分析问题"
     };
 

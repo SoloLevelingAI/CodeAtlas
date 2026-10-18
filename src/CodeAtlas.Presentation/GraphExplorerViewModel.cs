@@ -11,7 +11,8 @@ public sealed record ViewportState(double X = 0, double Y = 0, double Zoom = 1,
 public sealed record ExplorerState(string? SelectedId = null, string Query = "",
     ArchitecturalRole? Scope = null, ExplorationPerspective Perspective = ExplorationPerspective.Feature,
     string Panel = "graph", int? FindingIndex = null, ViewportState? Viewport = null,
-    int? RelationIndex = null, bool FullSource = false, string? FeatureId = null, string? ClassId = null, int Page = 0, int MapPage = 0);
+    int? RelationIndex = null, bool FullSource = false, string? FeatureId = null, string? ClassId = null, int Page = 0, int MapPage = 0,
+    string? FocusPath = null, int FocusLine = 0);
 
 /// <summary>管理功能路径、筛选和返回记录，通过工作区契约派发动作，不依赖具体功能实现。</summary>
 public sealed partial class GraphExplorerViewModel(IExplorerWorkspace workspace)
@@ -134,10 +135,35 @@ public sealed partial class GraphExplorerViewModel(IExplorerWorkspace workspace)
             if (index >= 0) mapPage = index / MapPageSize;
         }
         Navigate(State with { SelectedId = id, FindingIndex = null, RelationIndex = null, FullSource = false, Panel = "graph",
-            FeatureId = feature, ClassId = container, MapPage = mapPage,
+            FeatureId = feature, ClassId = container, MapPage = mapPage, FocusPath = null, FocusLine = 0,
             Query = node?.Kind is "type" or "interface" || feature != State.FeatureId ? "" : State.Query,
             Scope = node is not null && State.Scope != node.Role ? null : State.Scope, Page = 0,
             Viewport = (State.Viewport ?? new()) with { DetailScroll = 0 } });
+    }
+
+    /// <summary>从规范或分工证据回到代码地图。有符号时选中符号；否则只打开报告快照中的文件行。</summary>
+    /// <param name="nodeId">报告中的符号标识；不存在时改看文件。</param>
+    /// <param name="path">报告原文路径。</param>
+    /// <param name="line">从 1 开始的行号。</param>
+    [AtlasComponent("atlas.explore.navigation.path", ArchitecturalRole.Presentation)]
+    public void FocusEvidence(string? nodeId, string? path, int line)
+    {
+        if (Workspace is null)
+        {
+            return;
+        }
+        if (nodeId is not null && Workspace.Report.Graph.Nodes.Any(node => node.Id == nodeId))
+        {
+            Select(nodeId);
+            return;
+        }
+        if (string.IsNullOrEmpty(path) || !Workspace.Report.Graph.Documents.Any(document => document.Path == path))
+        {
+            return;
+        }
+        Navigate(State with { SelectedId = null, FindingIndex = null, RelationIndex = null, Panel = "graph",
+            FocusPath = path, FocusLine = Math.Max(1, line), FullSource = false, FeatureId = null, ClassId = null, Query = "",
+            Scope = null, Page = 0, Viewport = (State.Viewport ?? new()) with { DetailScroll = 0 } });
     }
 
     /// <summary>打开一项诊断的说明与源码证据，并记录返回位置。</summary>

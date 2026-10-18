@@ -1,0 +1,32 @@
+@using CodeAtlas.Contracts
+@using CodeAtlas.Exploration
+<div class="relation">
+    <b>@Risk.Rule · @Risk.Severity</b>
+    <span class="description">@Risk.Message</span>
+    <small>@Risk.Source</small>
+    @if (Href is not null)
+    {
+        <a class="risk-link" href="@Href">在代码地图中查看</a>
+    }
+    else
+    {
+        <small>报告里没有可定位的符号或原文。</small>
+    }
+    @if (Lines.Count > 0)
+    {
+        <div class="code">
+            @foreach (var line in Lines)
+            {
+                <div class="code-line @(line.Number == Risk.Line ? "current" : "")"><span>@line.Number</span><code>@line.Text</code></div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DivisionRisk Risk { get; set; } = default!;
+    [Parameter] public SourceGraph? Graph { get; set; }
+    [Parameter] public string ReportId { get; set; } = "";
+    private string? Href => Graph is null ? null : EvidenceLocator.MapHref(ReportId, Risk.NodeId, Risk.Path, Risk.Line, Graph);
+    private IReadOnlyList<(int Number, string Text)> Lines => Graph is null ? [] : EvidenceLocator.Excerpt(Graph, Risk.Path, Risk.Line);
+}

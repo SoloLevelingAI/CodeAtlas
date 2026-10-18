@@ -1,0 +1,169 @@
+@page "/standards"
+@using CodeAtlas.Contracts
+@using CodeAtlas.Exploration
+@inject IExplorerWorkspace WorkspacePort
+@inject NavigationManager Nav
+
+<ReadingChrome Page="standards" Title="架构规范" Summary="要求、自动检查范围、映射规则和保守判断。没有诊断不等于通过。" Workspace="workspace" ReportChanged="ChangeReport">
+    @if (error is not null)
+    {
+        <div class="error-banner">@error</div>
+    }
+    else if (workspace is null || guide is null)
+    {
+        <div class="loading">正在读取报告与规范…</div>
+    }
+    else
+    {
+        <div id="standards-page" class="reading-wrap">
+            <div class="navigation">
+                <div class="perspectives">
+                    <button id="standards-tab" class="@(tab == 0 ? "active" : "")" @onclick="() => tab = 0">规范与符合性</button>
+                    <button id="migration-tab" class="@(tab == 1 ? "active" : "")" @onclick="() => tab = 1">整理路线（待执行）</button>
+                    <button id="support-tab" class="@(tab == 2 ? "active" : "")" @onclick="() => tab = 2">已实现与不支持</button>
+                </div>
+            </div>
+            @if (tab == 0)
+            {
+                <div class="reading">
+                    <section class="panel">
+                        <div class="panel-head"><strong>A01–A10</strong><span>@guide.Version · @workspace.Report.Name</span></div>
+                        <div id="rule-list" class="scroll-list">
+                            @foreach (ArchitectureAssessment item in assessments)
+                            {
+                                <button type="button" class="entry @(item.Rule.Id == selected ? "selected" : "")" data-rule="@item.Rule.Id" @onclick="() => selected = item.Rule.Id">
+                                    <b>@item.Label</b><span>@item.Status</span>
+                                </button>
+                            }
+                        </div>
+                    </section>
+                    @if (Current is { } assessment)
+                    {
+                        <section id="rule-detail" class="panel">
+                            <div class="detail-body">
+                                <span class="badge @Badge(assessment.Status)">@assessment.Rule.Id</span>
+                                <h1>@assessment.Rule.Title</h1>
+                                <p id="rule-status" class="purpose-text">@assessment.Status</p>
+                                <p class="description">@guide.Intent</p>
+                                <h3>规范要求</h3><p>@assessment.Rule.Requirement</p>
+                                <h3>为什么这样分</h3><p>@assessment.Rule.Reason</p>
+                                <h3>当前能检查到哪里</h3><p>@assessment.Rule.Automation</p>
+                                <div class="facts">
+                                    <div><span>映射的规则</span><b>@(assessment.Rule.FindingRules.Length == 0 ? "没有映射的自动规则" : string.Join("、", assessment.Rule.FindingRules))</b></div>
+                                    <div><span>Markdown</span><b>@assessment.Rule.MarkdownPath</b></div>
+                                </div>
+                                <h3>如何整理</h3><p>@assessment.Rule.Change</p>
+                                <h3>验收条件</h3><p>@assessment.Rule.Acceptance</p>
+                                <button type="button" class="source-toggle" @onclick="() => showMarkdown = !showMarkdown">@(showMarkdown ? "收起 Markdown 原文" : "查看 Markdown 原文")</button>
+                                @if (showMarkdown)
+                                {
+                                    <pre class="markdown">@ArchitectureGuide.ReadMarkdown(assessment.Rule.Id)</pre>
+                                }
+                                <h3>当前证据：@assessment.EvidenceCount 条（显示前 @assessment.Evidence.Length 条）</h3>
+                                @if (assessment.EvidenceCount == 0)
+                                {
+                                    <div class="note">没有可用诊断不能推出符合规范。需要结合源码声明、人工审阅与行为回归。</div>
+                                }
+                                @foreach (AnalysisFinding finding in assessment.Evidence)
+                                {
+                                    string? href = EvidenceLocator.MapHref(workspace.Report.Id, finding.NodeId, finding.Source.Path, finding.Source.Line, workspace.Report.Graph);
+                                    <div class="relation">
+                                        <b>@finding.Rule · @finding.Severity</b>
+                                        <span class="description">@finding.Message</span>
+                                        <small>@finding.Source.Path:@finding.Source.Line</small>
+                                        @if (href is not null)
+                                        {
+                                            <a class="evidence-link" href="@href">在代码地图中查看</a>
+                                        }
+                                        else
+                                        {
+                                            <small>报告里没有可定位的符号或原文。</small>
+                                        }
+                                        @if (EvidenceLocator.Excerpt(workspace.Report.Graph, finding.Source.Path, finding.Source.Line) is { Count: > 0 } lines)
+                                        {
+                                            <div class="code">
+                                                @foreach (var line in lines)
+                                                {
+                                                    <div class="code-line @(line.Number == finding.Source.Line ? "current" : "")"><span>@line.Number</span><code>@line.Text</code></div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </section>
+                    }
+                </div>
+            }
+            else if (tab == 1)
+            {
+                <div class="stack">
+                    <h1>先迁移一个纵向功能</h1>
+                    <p>以下是待执行的整理方案，不是已完成重构。每一步先保持原行为，再检查依赖边界。</p>
+                    <ol>
+                        @foreach (string step in guide.Migration)
+                        {
+                            <li>@step</li>
+                        }
+                    </ol>
+                </div>
+            }
+            else
+            {
+                <div class="stack">
+                    <h3>已实现</h3>
+                    <p>C# 结构与规则分析、功能目录、搜索、关系图、只读源码与行号、桌面/命令行，以及本页和分工视图。</p>
+                    <h3>未实现</h3>
+                    <p>源码编辑保存、自动重构、运行时追踪、DLL 热卸载、客户分发闭包验证和 AI 管理。</p>
+                    <h3>报告与分析</h3>
+                    <p>分析仓库会读取源码并生成新快照；打开历史报告只查看已经保存的结果。浏览不会重新扫描，更不会执行目标项目。</p>
+                    @foreach (SupportStatement item in workspace.Report.Support)
+                    {
+                        <div class="support"><b>@item.Capability <i>@item.Status</i></b><p>@item.Detail</p></div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</ReadingChrome>
+
+@code {
+    [SupplyParameterFromQuery(Name = "report")] public string? ReportId { get; set; }
+    private ExplorerWorkspace? workspace;
+    private ArchitectureGuide? guide;
+    private ArchitectureAssessment[] assessments = [];
+    private string? error;
+    private string selected = "A01";
+    private int tab;
+    private bool showMarkdown;
+    private int loadVersion;
+    private string? loadedQuery;
+
+    private ArchitectureAssessment? Current => assessments.FirstOrDefault(item => item.Rule.Id == selected) ?? assessments.FirstOrDefault();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedQuery == ReportId && workspace is not null) return;
+        int version = ++loadVersion;
+        try
+        {
+            ExplorerWorkspace loaded = await WorkspacePort.LoadAsync(string.IsNullOrWhiteSpace(ReportId) ? null : ReportId);
+            if (version != loadVersion) return;
+            guide ??= ArchitectureGuide.Load();
+            workspace = loaded;
+            assessments = guide.Assess(loaded.Report);
+            if (assessments.All(item => item.Rule.Id != selected)) selected = assessments.FirstOrDefault()?.Rule.Id ?? "A01";
+            error = null;
+            loadedQuery = ReportId;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            if (version != loadVersion) return;
+            error = ex.Message;
+            workspace = null;
+        }
+    }
+
+    private void ChangeReport(string id) => Nav.NavigateTo("/standards?report=" + Uri.EscapeDataString(id));
+    private static string Badge(string status) => status.Contains("存在问题", StringComparison.Ordinal) || status.Contains("证据不足", StringComparison.Ordinal) ? "amber" : "";
+}

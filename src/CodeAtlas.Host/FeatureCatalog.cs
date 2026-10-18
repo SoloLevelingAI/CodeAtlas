@@ -17,7 +17,7 @@ using CodeAtlas.Framework;
 [assembly: AtlasFeature("atlas.reports.store", "读写报告快照", "实现报告创建、读取、列表、替换和删除；中断写入时保留已有报告。", "atlas.reports", Inputs = "报告对象或报告标识", Outputs = "持久化快照或明确的存储错误")]
 
 [assembly: AtlasFeature("atlas.quality", "质量检查", "识别代码边界与信息组织的问题，让规则能被正反例验证。", Kind = FeatureKind.Module)]
-[assembly: AtlasFeature("atlas.quality.boundaries", "检查职责边界", "检查越层依赖、契约中混入行为和纯计算中的已知外部作用。", "atlas.quality", Inputs = "语义关系图", Outputs = "定位到源文件的边界问题")]
+[assembly: AtlasFeature("atlas.quality.boundaries", "检查职责边界", "检查越层依赖、契约签名、交互和用例上的已知外部作用，以及可见的提供方注册。", "atlas.quality", Inputs = "语义关系图", Outputs = "定位到源文件的边界问题")]
 [assembly: AtlasFeature("atlas.quality.structure", "检查层级与说明", "发现未登记功能、错误父级、缺失方法说明和过大的扁平方法集合。", "atlas.quality", Inputs = "功能目录、类型与方法说明", Outputs = "带修改建议的结构问题")]
 [assembly: AtlasFeature("atlas.quality.regression", "验证正反例", "用正常实现、故意违规样例和自身源码检验检查器是否真的发现问题。", "atlas.quality")]
 

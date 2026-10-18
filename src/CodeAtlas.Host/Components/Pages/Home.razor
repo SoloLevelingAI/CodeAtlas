@@ -1,2 +1,9 @@
 @page "/"
-<Explorer />
+<Explorer InitialReportId="@Report" InitialNodeId="@Node" InitialFile="@File" InitialLine="@(Line ?? 0)" />
+
+@code {
+    [SupplyParameterFromQuery(Name = "report")] public string? Report { get; set; }
+    [SupplyParameterFromQuery(Name = "node")] public string? Node { get; set; }
+    [SupplyParameterFromQuery(Name = "file")] public string? File { get; set; }
+    [SupplyParameterFromQuery(Name = "line")] public int? Line { get; set; }
+}

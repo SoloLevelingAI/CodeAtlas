@@ -6,7 +6,7 @@ using CodeAtlas.Framework;
 
 namespace CodeAtlas.Analysis.Core;
 
-/// <summary>检查职责越层、契约中的实现和纯计算的已知副作用；同时汇总结构说明问题。</summary>
+/// <summary>检查职责越层、契约签名、已知外部作用和可见注册；同时汇总结构说明问题。</summary>
 [AtlasProvides(typeof(IArchitectureRules))]
 public sealed class ArchitectureRules : IArchitectureRules
 {
@@ -18,6 +18,7 @@ public sealed class ArchitectureRules : IArchitectureRules
     {
         var findings = ImmutableArray.CreateBuilder<AnalysisFinding>();
         findings.AddRange(FeatureStructureRules.Evaluate(graph));
+        findings.AddRange(BoundaryEvidenceRules.Evaluate(graph));
         var nodes = graph.Nodes.ToDictionary(node => node.Id, StringComparer.Ordinal);
 
         foreach (CodeNode node in graph.Nodes.Where(node => node.Role == ArchitecturalRole.Contract && node.HasBehavior))

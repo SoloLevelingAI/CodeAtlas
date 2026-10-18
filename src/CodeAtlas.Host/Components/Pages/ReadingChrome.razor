@@ -1,0 +1,39 @@
+@using CodeAtlas.Contracts
+<div class="shell">
+    <aside class="rail">
+        <div class="brand">Code <em>Atlas</em></div>
+        <div class="brand-sub">功能结构与源码证据</div>
+        <div class="rail-caption">规范与分工</div>
+        <a href="@Href("/")">⌘　功能地图</a>
+        <a id="standards-link" class="@(Page == "standards" ? "active" : "")" href="@Href("/standards")">▤　架构规范</a>
+        <a id="division-link" class="@(Page == "division" ? "active" : "")" href="@Href("/division")">▦　分工视图</a>
+        <footer>证据来自已保存报告<br />无诊断不等于通过</footer>
+    </aside>
+    <main>
+        <header class="topbar">
+            <div><strong>@Title</strong><small>@Summary</small></div>
+            @if (Workspace is not null)
+            {
+                <select id="report-select" aria-label="选择报告" value="@Workspace.Report.Id" @onchange="Changed">
+                    @foreach (ReportSummary report in Workspace.Reports)
+                    {
+                        <option value="@report.Id">@report.Name</option>
+                    }
+                </select>
+            }
+        </header>
+        @ChildContent
+    </main>
+</div>
+
+@code {
+    [Parameter] public string Page { get; set; } = "";
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Summary { get; set; } = "";
+    [Parameter] public ExplorerWorkspace? Workspace { get; set; }
+    [Parameter] public EventCallback<string> ReportChanged { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string Href(string path) => Workspace is null ? path : path + "?report=" + Uri.EscapeDataString(Workspace.Report.Id);
+    private Task Changed(ChangeEventArgs args) => ReportChanged.InvokeAsync(args.Value?.ToString() ?? "");
+}
