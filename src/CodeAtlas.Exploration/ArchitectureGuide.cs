@@ -38,12 +38,16 @@ public sealed class ArchitectureGuide
     {
         AnalysisFinding[] findings = report?.Findings.Where(f => rule.FindingRules.Contains(f.Rule, StringComparer.Ordinal)).ToArray() ?? [];
         bool unknown = report is null || report.Coverage.Symbols == 0 || report.Coverage.UnclassifiedSymbols > 0 || report.Findings.Any(f => f.Severity == FindingSeverity.Unsupported);
+        bool problems = findings.Any(f => f.Severity is FindingSeverity.Error or FindingSeverity.Warning);
+        string status = report is null ? "尚未分析仓库"
+            : rule.FindingRules.Length == 0 ? "需要人工验证 / 自动检查未实现"
+            : problems ? "存在问题，需逐项审阅"
+            : rule.ExternalEvidence ? "需要独立回归证据，不能凭本次源码图判为通过"
+            : unknown ? "证据不足，不能判为符合"
+            : "未发现已知问题，仍需人工确认";
         return new ArchitectureAssessment
         {
-            Rule = rule, EvidenceCount = findings.Length, Evidence = findings.Take(30).ToArray(),
-            Status = report is null ? "尚未分析仓库" : rule.FindingRules.Length == 0 ? "需要人工验证 / 自动检查未实现"
-                : findings.Any(f => f.Severity is FindingSeverity.Error or FindingSeverity.Warning) ? "存在问题，需逐项审阅"
-                : unknown ? "证据不足，不能判为符合" : "未发现已知问题，仍需人工确认"
+            Rule = rule, EvidenceCount = findings.Length, Evidence = findings.Take(30).ToArray(), Status = status
         };
     }).ToArray();
 }
@@ -59,6 +63,8 @@ public sealed class ArchitectureRule
     public string Reason { get; init; } = "";
     public string Automation { get; init; } = "";
     public string[] FindingRules { get; init; } = [];
+    /// <summary>为 true 时，本次源码图没有对应诊断也不能判为符合，证据在独立回归里。</summary>
+    public bool ExternalEvidence { get; init; }
     public string Change { get; init; } = "";
     public string Acceptance { get; init; } = "";
 }

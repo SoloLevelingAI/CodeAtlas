@@ -43,11 +43,16 @@ public static class Program
             Check(guide.Rules.All(r => r.MarkdownPath == "docs/standards/" + r.Id + ".md" && ArchitectureGuide.ReadMarkdown(r.Id).Contains(r.Requirement, StringComparison.Ordinal)), "每条规范对应真实 Markdown 且应用内原文与要求一致");
             Check(guide.Assess(null).All(a => a.Status == "尚未分析仓库"), "无报告不能通过架构认证");
             AnalysisReport missingEvidence = report with { Coverage = report.Coverage with { UnclassifiedSymbols = 1 } };
-            Check(guide.Assess(missingEvidence).Where(a => a.Rule.FindingRules.Length > 0).All(a => a.Status.Contains("证据不足", StringComparison.Ordinal)), "缺少声明不伪装成符合规范");
+            Check(guide.Assess(missingEvidence).Where(a => a.Rule.FindingRules.Length > 0 && !a.Rule.ExternalEvidence).All(a => a.Status.Contains("证据不足", StringComparison.Ordinal)), "缺少声明不伪装成符合规范");
             AnalysisReport knownViolation = report with { Findings = [new("LD002", FindingSeverity.Warning, "fixture issue", At(), "Run")] };
             ArchitectureAssessment vmAssessment = guide.Assess(knownViolation).Single(a => a.Rule.Id == "A03");
             Check(vmAssessment.EvidenceCount == 1 && vmAssessment.Evidence[0].NodeId == "Run" && vmAssessment.Status.StartsWith("存在问题", StringComparison.Ordinal), "人工问题映射规范并保留可定位证据");
-            Check(guide.Assess(report).Single(a => a.Rule.Id == "A07").Status.Contains("未实现", StringComparison.Ordinal), "未实现的模块分发检查不能认证为通过");
+            Check(guide.Assess(report).Single(a => a.Rule.Id == "A07").Status.Contains("仍需人工确认", StringComparison.Ordinal), "没有模块诊断不能认证为通过");
+            Check(guide.Assess(report).Single(a => a.Rule.Id == "A09").Status.Contains("仍需人工确认", StringComparison.Ordinal), "没有整图集合不能认证浏览性能");
+            Check(guide.Assess(report).Single(a => a.Rule.Id == "A10").Status.Contains("独立回归", StringComparison.Ordinal), "反例闭环不能凭空图认定");
+            Check(guide.Rules.Single(r => r.Id == "A07").FindingRules.Contains("AT110") && guide.Rules.Single(r => r.Id == "A09").FindingRules.Contains("AT130") && guide.Rules.Single(r => r.Id == "A10").ExternalEvidence, "A07/A09 有自动诊断且 A10 仍要求独立回归");
+            AnalysisReport moduleViolation = report with { Findings = [new("AT109", FindingSeverity.Error, "duplicate", At(), "Run")] };
+            Check(guide.Assess(moduleViolation).Single(a => a.Rule.Id == "A07").Status.StartsWith("存在问题", StringComparison.Ordinal), "重复提供方映射到模块规范");
             Check(index.MaterializedCount == 2, "初始只实现根节点与原文入口");
             var session = new ExplorerSession(); session.Load(index);
             session.Select("Run"); ExplorerItem item = session.Selected!;

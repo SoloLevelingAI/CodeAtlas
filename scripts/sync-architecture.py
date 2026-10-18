@@ -29,6 +29,7 @@ for path in sorted(folder.glob('A[0-9][0-9].md')):
     rule = {'Id': heading.group(1), 'Title': heading.group(2), 'MarkdownPath': path.relative_to(root).as_posix()}
     rule.update({key: parts[heading] for key, heading in fields.items()})
     rule['FindingRules'] = [] if parts['关联诊断'] == '无自动诊断规则' else [x.strip() for x in parts['关联诊断'].split(',')]
+    rule['ExternalEvidence'] = '【独立回归】' in parts['自动检查范围']
     if not all(rule[key] for key in fields):
         raise ValueError('Incomplete rule: ' + str(path))
     data['Rules'].append(rule)

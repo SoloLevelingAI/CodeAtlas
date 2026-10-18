@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using CodeAtlas.Framework;
 using CodeAtlas.Contracts;
 using CodeAtlas.Analysis.Core;
@@ -19,6 +20,7 @@ public static class Program
     private static readonly CSharpIndexer Indexer = new();
     private static readonly ArchitectureRules Rules = new();
     private static readonly List<string> Passed = [];
+    private static readonly HashSet<string> Triggered = new(StringComparer.Ordinal);
 
     public static async Task<int> Main(string[] args)
     {
@@ -37,6 +39,7 @@ public static class Program
             RegistrationCases();
             await InventoryCases(temporary);
             await SelfCases(root);
+            ConformanceCases(root);
             Console.WriteLine(JsonSerializer.Serialize(new { Status = "passed", Assertions = Passed.Count, Passed }, new JsonSerializerOptions { WriteIndented = true }));
             return 0;
         }
@@ -57,7 +60,13 @@ public static class Program
     private static ImmutableArray<AnalysisFinding> Findings(string code)
     {
         SourceGraph graph = Graph("using CodeAtlas.Framework;\n" + code);
-        return graph.Findings.AddRange(Rules.Evaluate(graph));
+        ImmutableArray<AnalysisFinding> findings = graph.Findings.AddRange(Rules.Evaluate(graph));
+        Note(findings);
+        return findings;
+    }
+    private static void Note(IEnumerable<AnalysisFinding> findings)
+    {
+        foreach (AnalysisFinding finding in findings) Triggered.Add(finding.Rule);
     }
     private static void Check(bool condition, string name)
     {
@@ -65,6 +74,7 @@ public static class Program
         Passed.Add(name);
     }
     private static void Has(string code, string rule, string name) => Check(Findings(code).Any(item => item.Rule == rule), name);
+    private static void Lacks(string code, string rule, string name) => Check(!Findings(code).Any(item => item.Rule == rule), name);
 
     private static void AnalyzerCases()
     {
@@ -76,6 +86,11 @@ public static class Program
             public class ViewModel(ICalc port) { public int Execute() => port.Run(2); }
             """;
         Check(!Findings(clean).Any(item => item.Severity is FindingSeverity.Error or FindingSeverity.Unsupported), "clean contract composition resolves without false errors");
+        Lacks(clean, "AT105", "presentation port call is not direct IO");
+        Lacks(clean, "AT106", "plain contract signatures are not adapter types");
+        Lacks(clean, "AT108", "provider without a visible composition root is not reported as unregistered");
+        Lacks(clean, "AT110", "missing registration evidence does not become a violation or a pass");
+        Lacks(clean, "AT130", "view model without a snapshot collection is not a history copy");
         SourceGraph graph = Graph("using CodeAtlas.Framework;\n" + clean);
         Check(graph.Relations.Any(edge => edge.Kind == RelationKind.Invocation && edge.To.Contains("ICalc.Run", StringComparison.Ordinal)), "interface call targets contract");
         Check(!graph.Relations.Any(edge => edge.Kind == RelationKind.Invocation && edge.From.Contains("ViewModel", StringComparison.Ordinal) && edge.To.Contains("Calc.Run", StringComparison.Ordinal) && !edge.To.Contains("ICalc.Run", StringComparison.Ordinal)), "no invented runtime dispatch to implementation");
@@ -102,7 +117,13 @@ public static class Program
         Has("#if FEATURE_X\npublic class Hidden {}\n#endif\npublic class Visible {}", "AT204", "inactive compile branch explicitly unsupported");
         Has("System.Console.WriteLine(1);", "AT210", "top-level ownership explicitly unsupported");
         SourceGraph other = Graph("<Component />", ".razor");
+        Note(other.Findings);
         Check(other.Documents.Single().Text == "<Component />" && other.Findings.Any(item => item.Rule == "AT200"), "unsupported source retained verbatim");
+        Has("[assembly:AtlasModule(\"a\",\"A\",ArchitecturalRole.Feature)] [assembly:AtlasModule(\"b\",\"B\",ArchitecturalRole.Feature)] public class C {}", "AT002", "duplicate module default is rejected");
+        Has("/// <summary><b>未闭合\npublic class BrokenDoc { public void Run() {} }", "AT016", "unparseable documentation is retained as a gap");
+        Has("public class SemanticGap { public int Run() => \"x\"; }", "AT207", "source view semantic error stays unsupported");
+        Has("/// <inheritdoc/>\npublic class InheritedDoc { }", "AT209", "inheritdoc is explicitly unsupported");
+        EvidenceCases();
         SourceGraph overloads = Graph("public partial class C { public void M(int x) {} public void M(string x) {} } public partial class C { public void Other() => M(1); }");
         Check(overloads.Nodes.Count(node => node.Name == "M") == 2 && overloads.Relations.Any(edge => edge.Kind == RelationKind.Invocation && edge.To.EndsWith("(System.Int32)", StringComparison.Ordinal)), "partial type and overload call preserve symbol identity");
         Check(graph.Relations.All(edge => edge.Source.Line > 0 && edge.Source.Path == "fixture.cs"), "all resolved relations carry source evidence");
@@ -357,6 +378,12 @@ public static class Program
         SourceSnapshot snapshot = await new SourceRepository().ReadAsync(source);
         Check(snapshot.Documents.Length == 4 && !snapshot.Documents.Any(document => document.Path.StartsWith("bin/", StringComparison.Ordinal)), "inventory includes unsupported config and excludes build output");
         Check(snapshot.InventoryFindings.Any(item => item.Rule == "AT203") && snapshot.Documents.Any(document => document.Language == "unsupported-encoding"), "unreadable encoding is preserved as explicit gap");
+        string link = Path.Combine(source, "linked.cs");
+        File.CreateSymbolicLink(link, "Legacy.cs");
+        SourceSnapshot linked = await new SourceRepository().ReadAsync(source);
+        Note(linked.InventoryFindings);
+        Check(linked.InventoryFindings.Any(item => item.Rule == "AT202"), "symlink is an explicit unsupported gap");
+        Note(snapshot.InventoryFindings);
     }
 
     private static async Task SelfCases(string root)
@@ -365,6 +392,12 @@ public static class Program
         AnalysisReport report = await analyzer.AnalyzeAsync(new("self", "Code Atlas · 自身源码", root));
         AnalysisFinding[] errors = report.Findings.Where(item => item.Severity == FindingSeverity.Error).ToArray();
         Check(errors.Length == 0, "self analysis has no known boundary errors: " + string.Join("; ", errors.Select(item => item.Message)));
+        string[] strict = ["AT106", "AT107", "AT108", "AT109", "AT110", "AT111", "AT130"];
+        AnalysisFinding[] strictHits = report.Findings.Where(item => strict.Contains(item.Rule)).ToArray();
+        Check(strictHits.Length == 0, "self analysis has no false positives from strict new rules: " + string.Join(" | ", strictHits.Select(item => item.Rule + " " + item.Source.Path + ":" + item.Source.Line + " " + item.Message)));
+        AnalysisFinding[] retained = report.Findings.Where(item => item.Rule is "AT105" or "AT118").ToArray();
+        Passed.Add("self retained evidence: " + (retained.Length == 0 ? "(none)" : string.Join(" | ", retained.Select(item => item.Rule + "@" + item.Source.Path + ":" + item.Source.Line))));
+        Note(report.Findings);
         Check(report.Coverage.CSharpFiles >= 15 && report.Coverage.UnclassifiedSymbols == 0, "self source has explicit roles including regression tests");
         Check(report.Findings.Any(item => item.Severity == FindingSeverity.Unsupported), "self unsupported semantics remain visible");
         Check(report.Graph.Relations.Any(item => item.Kind == RelationKind.Registration), "self typed registrations produce graph evidence");
@@ -374,6 +407,120 @@ public static class Program
             .All(edge => nodes[edge.To].Role is ArchitecturalRole.Presentation or ArchitecturalRole.Contract or ArchitecturalRole.Framework), "self ViewModel depends only on interaction contracts and declarations");
         Check(report.Graph.Relations.All(edge => nodes.ContainsKey(edge.From) && nodes.ContainsKey(edge.To)), "self graph has no dangling relations");
         await new JsonReportRepository(Path.Combine(root, "artifacts", "reports")).SaveAsync(report);
+    }
+
+    private const string RegistrationHost = """
+        using CodeAtlas.Composition;
+        using Microsoft.Extensions.DependencyInjection;
+        namespace CodeAtlas.Composition
+        {
+            public static class AtlasRegistration
+            {
+                public static IServiceCollection AddAtlas<TContract, TImplementation>(this IServiceCollection services)
+                    where TContract : class where TImplementation : class, TContract => services;
+            }
+        }
+        """;
+
+    private static void EvidenceCases()
+    {
+        Has("""
+            [AtlasComponent("p",ArchitecturalRole.Presentation)] public class Page { public string Load() => System.IO.File.ReadAllText("a"); }
+            """, "AT105", "presentation file access is evidence");
+        Lacks("""
+            [AtlasComponent("p",ArchitecturalRole.Contract)] public interface ILoad { string Load(); }
+            [AtlasComponent("p",ArchitecturalRole.Presentation)] public class Page(ILoad port) { public string Load() => port.Load(); }
+            """, "AT105", "presentation calling a port is not direct IO");
+        Has("""
+            [AtlasComponent("c",ArchitecturalRole.Contract)] public interface IBad { System.IO.FileStream Open(); }
+            """, "AT106", "contract method exposing a file stream is rejected");
+        Has("""
+            [AtlasComponent("c",ArchitecturalRole.Contract)] public sealed record Packet(System.Net.Http.HttpClient Client);
+            """, "AT106", "contract record exposing an HTTP client is rejected");
+        Lacks("""
+            [AtlasComponent("c",ArchitecturalRole.Contract)] public interface IGood { string Name { get; } int Run(int value); }
+            [AtlasComponent("c",ArchitecturalRole.Contract)] public sealed record Packet(string Name, int Count);
+            """, "AT106", "intent-only contract signatures stay clean");
+        Has("""
+            [AtlasComponent("a",ArchitecturalRole.Application)] public class UseCase { public string Load() => System.IO.File.ReadAllText("a"); }
+            """, "AT107", "application file access is rejected");
+        Lacks("""
+            [AtlasComponent("a",ArchitecturalRole.Contract)] public interface ILoad { string Load(); }
+            [AtlasComponent("a",ArchitecturalRole.Application)] public class UseCase(ILoad port) { public string Load() => port.Load(); }
+            """, "AT107", "application calling a port is not direct IO");
+        Lacks("""
+            [AtlasComponent("a",ArchitecturalRole.Application)] public class UseCase { public System.DateTimeOffset Stamp() => System.DateTimeOffset.UtcNow; }
+            """, "AT107", "application report clock is not an adapter bypass");
+        Has("""
+            public class SourceGraph {}
+            public class AnalysisReport {}
+            [AtlasComponent("p",ArchitecturalRole.Presentation)] public class History { public System.Collections.Generic.List<SourceGraph> Shots { get; } = new(); public AnalysisReport[] All { get; } = []; }
+            """, "AT130", "presentation snapshot collection is evidence");
+        Lacks("""
+            public class SourceGraph {}
+            [AtlasComponent("p",ArchitecturalRole.Presentation)] public class History { private SourceGraph? current; }
+            """, "AT130", "holding the current snapshot is not a per-step copy");
+        Has("[assembly:AtlasModule(\"missing.module\",\"缺失\",ArchitecturalRole.Feature)] public class C {}", "AT111", "module id without a feature is not a registered module");
+        Lacks("""
+            [assembly:AtlasFeature("mod","模块","用途",Kind=FeatureKind.Module)]
+            [assembly:AtlasModule("mod","模块",ArchitecturalRole.Feature)]
+            public class C {}
+            """, "AT111", "module id registered in the feature catalog is accepted");
+        const string ports = """
+            [AtlasComponent("m",ArchitecturalRole.Contract)] public interface IPort { void Run(); }
+            [AtlasComponent("m",ArchitecturalRole.Contract)] public interface IOther { void Run(); }
+            [AtlasComponent("m",ArchitecturalRole.Feature)] [AtlasProvides(typeof(IPort))] public sealed class Left : IPort { public void Run() {} }
+            [AtlasComponent("m",ArchitecturalRole.Feature)] [AtlasProvides(typeof(IPort))] public sealed class Right : IPort { public void Run() {} }
+            [AtlasComponent("m",ArchitecturalRole.Feature)] [AtlasProvides(typeof(IOther))] public sealed class Other : IOther { public void Run() {} }
+            [AtlasComponent("m",ArchitecturalRole.Feature)] public sealed class Secret : IPort { public void Run() {} }
+            """;
+        Lacks(RegistrationHost + ports + """
+            [AtlasComponent("m",ArchitecturalRole.Composition)] public sealed class Root { public void Wire(IServiceCollection services) => services.AddAtlas<IPort, Left>(); }
+            """, "AT108", "declared provider registration is not a missing attribute");
+        Lacks(RegistrationHost + ports + """
+            [AtlasComponent("m",ArchitecturalRole.Composition)] public sealed class Root { public void Wire(IServiceCollection services) => services.AddAtlas<IPort, Left>(); }
+            """, "AT109", "one provider for a port is not a duplicate");
+        Lacks(RegistrationHost + """
+            [AtlasComponent("m",ArchitecturalRole.Contract)] public interface IPort { void Run(); }
+            [AtlasComponent("m",ArchitecturalRole.Feature)] [AtlasProvides(typeof(IPort))] public sealed class Left : IPort { public void Run() {} }
+            [AtlasComponent("m",ArchitecturalRole.Composition)] public sealed class Root { public void Wire(IServiceCollection services) => services.AddAtlas<IPort, Left>(); }
+            """, "AT110", "registered provider is not reported missing");
+        Lacks(RegistrationHost + """
+            [AtlasComponent("m",ArchitecturalRole.Composition)] public sealed class Root { public void Wire(IServiceCollection services) => services.AddAtlas<IPort, Left>(); }
+            [AtlasComponent("m",ArchitecturalRole.Contract)] public interface IPort { void Run(); }
+            [AtlasComponent("m",ArchitecturalRole.Feature)] [AtlasProvides(typeof(IPort))] public sealed class Left : IPort { public void Run() {} }
+            """, "AT118", "AddAtlas is not an unapproved container registration");
+        Has(RegistrationHost + ports + """
+            [AtlasComponent("m",ArchitecturalRole.Composition)] public sealed class Root { public void Wire(IServiceCollection services) => services.AddAtlas<IPort, Secret>(); }
+            """, "AT108", "registration without AtlasProvides is rejected");
+        Has(RegistrationHost + ports + """
+            [AtlasComponent("m",ArchitecturalRole.Composition)] public sealed class Root { public void Wire(IServiceCollection services) { services.AddAtlas<IPort, Left>(); services.AddAtlas<IPort, Right>(); } }
+            """, "AT109", "two providers for one port are rejected");
+        Has(RegistrationHost + ports + """
+            [AtlasComponent("m",ArchitecturalRole.Composition)] public sealed class Root { public void Wire(IServiceCollection services) => services.AddAtlas<IPort, Left>(); }
+            """, "AT110", "declared provider missing from visible registrations is rejected");
+        Has("""
+            using Microsoft.Extensions.DependencyInjection;
+            public sealed class Vm {}
+            public sealed class Startup { public void Wire(IServiceCollection services) => services.AddScoped<Vm>(); }
+            """, "AT118", "container registration outside AddAtlas stays explicit");
+    }
+
+    private static void ConformanceCases(string root)
+    {
+        Note(ConformanceCatalog.Evaluate(new HashSet<string>(StringComparer.Ordinal), ["AT999"], [new("A00", "部分自动：示例", [])]));
+        Check(Triggered.Contains("AT120") && Triggered.Contains("AT121"), "missing counterexample and unmapped automation produce meta findings");
+        var emitters = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string file in Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories))
+        {
+            foreach (Match match in Regex.Matches(File.ReadAllText(file), "\"AT\\d{3}\"")) emitters.Add(match.Value.Trim('"'));
+        }
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "docs/architecture-standard.v1.json")));
+        StandardMapping[] standards = document.RootElement.GetProperty("Rules").EnumerateArray().Select(rule => new StandardMapping(
+            rule.GetProperty("Id").GetString() ?? "", rule.GetProperty("Automation").GetString() ?? "",
+            rule.GetProperty("FindingRules").EnumerateArray().Select(item => item.GetString() ?? "").ToArray())).ToArray();
+        AnalysisFinding[] gaps = ConformanceCatalog.Evaluate(Triggered, emitters, standards).ToArray();
+        Check(gaps.Length == 0, "rule catalog, counterexamples, and standard mapping agree: " + string.Join(" | ", gaps.Select(item => item.Message)));
     }
 
     private static void Throws<T>(Action action, string name) where T : Exception
