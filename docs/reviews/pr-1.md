@@ -4,6 +4,8 @@
 
 直接 Git fetch 无法连接 GitHub；GitHub 连接器可读，取得 PR 的 38 个文件补丁。导入后的本地 Git tree 为 `c3a6560764c689c481e3da36e8686139466cb00a`，与 GitHub 头提交 tree 完全一致。保留 PR 的规范与分工页、诊断规则、回归和旧报告，本轮在独立分支继续；未合并 PR。
 
+后续授权更新：用户允许推送和创建 PR，具体合并前确认。正常网络权限下的本机 GitHub 登录和 Git fetch 已验证可用；已保留本地导入快照，将正式分支接到 PR #1 的真实头提交，并创建 [PR #2](https://github.com/SoloLevelingAI/CodeAtlas/pull/2)。连接器 403 与本机 Git/gh 授权是两条不同通道，未更改连接器权限或放宽全局授权设置。
+
 ## 与模块改造目标有关的缺口
 
 1. PR 的 `AT111` 校验源码默认功能 ID 是否有 AtlasFeature，不是启动模块注册。没有 ModuleDescriptor / ModuleRegistry / ProfileResolver，因此不能据此认定模块已经可组合。本轮增加独立运行协议，旧属性含义保持原样。
