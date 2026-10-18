@@ -6,5 +6,6 @@
     <ProjectReference Include="../CodeAtlas.Language.CSharp/CodeAtlas.Language.CSharp.csproj" />
     <ProjectReference Include="../CodeAtlas.Application/CodeAtlas.Application.csproj" />
     <ProjectReference Include="../CodeAtlas.Presentation/CodeAtlas.Presentation.csproj" />
+    <ProjectReference Include="../CodeAtlas.Exploration/CodeAtlas.Exploration.csproj" />
   </ItemGroup>
 </Project>

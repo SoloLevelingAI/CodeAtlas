@@ -14,6 +14,11 @@ public partial class Explorer : ComponentBase, IAsyncDisposable
 {
     [Inject] public GraphExplorerViewModel Vm { get; set; } = default!;
     [Inject] public IJSRuntime Js { get; set; } = default!;
+    [Parameter] public string? InitialReportId { get; set; }
+    [Parameter] public string? InitialNodeId { get; set; }
+    [Parameter] public string? InitialFile { get; set; }
+    [Parameter] public int InitialLine { get; set; }
+    private string? focusKey;
     private bool restorePending;
     private DotNetObjectReference<Explorer>? mapReference;
     private bool mapBound;
@@ -34,7 +39,9 @@ public partial class Explorer : ComponentBase, IAsyncDisposable
     private AnalysisReport? Report => Vm.Workspace?.Report;
     private AnalysisFinding? Finding => Vm.State.FindingIndex is { } index ? Report?.Findings[index] : null;
     private CodeRelation? Relation => Vm.State.RelationIndex is { } index ? Report?.Graph.Relations[index] : null;
-    private SourceLocation? Source => Finding?.Source ?? Relation?.Source ?? Vm.Selected?.Source ?? (Vm.State.Panel == "graph" ? Vm.CurrentFeature?.Source : null);
+    private SourceLocation? Source => Finding?.Source ?? Relation?.Source ?? Vm.Selected?.Source
+        ?? (Vm.State.FocusPath is { Length: > 0 } path ? new SourceLocation(path, Math.Max(1, Vm.State.FocusLine), Math.Max(1, Vm.State.FocusLine)) : null)
+        ?? (Vm.State.Panel == "graph" ? Vm.CurrentFeature?.Source : null);
     private string Transform => FormattableString.Invariant($"translate({mapViewport.X} {mapViewport.Y}) scale({mapViewport.Zoom})");
 
     private ImmutableArray<FeaturePlacement> Placements { get { EnsureMap(); return placementCache; } }
@@ -49,7 +56,29 @@ public partial class Explorer : ComponentBase, IAsyncDisposable
         _ => Vm.CurrentFeature?.Purpose ?? "先选择要理解的功能，逐层找到子功能、页面、类型与方法。每一层都有明确任务。"
     };
 
-    protected override async Task OnInitializedAsync() => await Vm.LoadAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        string key = (InitialReportId ?? "") + "|" + (InitialNodeId ?? "") + "|" + (InitialFile ?? "") + "|" + InitialLine;
+        if (focusKey == key && Vm.Workspace is not null)
+        {
+            return;
+        }
+        if (Vm.Workspace is null || (InitialReportId is not null && Vm.Workspace.Report.Id != InitialReportId))
+        {
+            await Vm.LoadAsync(string.IsNullOrWhiteSpace(InitialReportId) ? null : InitialReportId);
+        }
+        if (Vm.Workspace is null)
+        {
+            return;
+        }
+        focusKey = key;
+        if (!string.IsNullOrEmpty(InitialNodeId) || !string.IsNullOrEmpty(InitialFile))
+        {
+            Vm.FocusEvidence(string.IsNullOrEmpty(InitialNodeId) ? null : InitialNodeId, InitialFile, InitialLine);
+        }
+    }
+
+    private string PageHref(string path) => Vm.Workspace is null ? path : path + "?report=" + Uri.EscapeDataString(Vm.Workspace.Report.Id);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

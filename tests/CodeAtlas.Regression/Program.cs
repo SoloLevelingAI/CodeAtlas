@@ -180,6 +180,13 @@ public static class Program
         var backend = new FakeWorkspace(report);
         var vm = new GraphExplorerViewModel(backend);
         await vm.LoadAsync();
+        vm.FocusEvidence("T:Quote", null, 0);
+        Check(vm.Selected?.Id == "T:Quote" && vm.State.FocusPath is null, "evidence focus selects the mapped symbol");
+        string document = report.Graph.Documents[0].Path;
+        vm.FocusEvidence("missing-node", document, 2);
+        Check(vm.Selected is null && vm.State.FocusPath == document && vm.State.FocusLine == 2, "unknown symbol opens the saved document line");
+        vm.SetFeature(null);
+        Check(vm.State.FocusPath is null && vm.State.FeatureId is null, "leaving the document returns to the feature map");
         Check(vm.ChildFeatures().Length == 2 && vm.VisibleNodes().Length == 0, "overview shows modules rather than a global flat type list");
         vm.SetFeature("sales");
         Check(vm.ChildFeatures().Single().Id == "sales.quote" && vm.VisibleNodes().Length == 0, "module opens only its next level");

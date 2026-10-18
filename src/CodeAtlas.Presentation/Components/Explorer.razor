@@ -7,6 +7,9 @@
         <button id="quality-panel" class="@(Vm.State.Panel == "quality" ? "active" : "")" @onclick='() => ChangeAsync(() => Vm.SetPanel("quality"))'>◉　检查结构</button>
         <button id="pending-panel" class="@(Vm.State.Panel == "pending" ? "active" : "")" @onclick='() => ChangeAsync(() => Vm.SetPanel("pending"))'>▣　补齐说明</button>
         <button id="unsupported" class="@(Vm.State.Panel == "unsupported" ? "active" : "")" @onclick='() => ChangeAsync(() => Vm.SetPanel("unsupported"))'>△　分析盲区</button>
+        <div class="rail-caption">规范与分工</div>
+        <a id="standards-link" href="@PageHref("/standards")">▤　架构规范</a>
+        <a id="division-link" href="@PageHref("/division")">▦　分工视图</a>
         <div class="rail-caption">固定位置</div>
         <div class="pins">@foreach (string pin in Vm.Pins) { <button @onclick="() => ChangeAsync(() => Vm.Select(pin))">★ @NodeName(pin)</button> }</div>
         <footer>功能 → 子功能 → 类型 → 方法<br />技术职责在功能内部查看<br />源码声明是组织依据</footer>
@@ -145,6 +148,10 @@
                         else if (Vm.State.Panel != "graph")
                         {
                             <span class="badge amber">全仓库检查 · 保留原有探索路径</span><h1>@PageTitle</h1><p class="purpose-text">@PagePurpose</p><div class="facts"><div><span>输入</span><b>当前报告中的源码、声明和分析证据</b></div><div><span>完成结果</span><b>定位具体问题，了解修改方式或分析限制</b></div></div><div class="note">左侧按问题类型折叠组织。展开一类，再选择具体问题查看来源；可按名称、文件或规则编号搜索。返回会恢复先前的功能查找位置。</div>
+                        }
+                        else if (Vm.State.FocusPath is { Length: > 0 })
+                        {
+                            <span class="badge amber">报告原文</span><h1>证据所在文件</h1><p class="purpose-text">这条证据没有对应的已索引符号。下面是报告快照里的源码行，不是磁盘上的当前文件。</p>
                         }
                         else if (Vm.CurrentFeature is { } feature)
                         {
