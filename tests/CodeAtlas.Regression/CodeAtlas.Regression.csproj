@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/CodeAtlas.Application/CodeAtlas.Application.csproj" />
+    <ProjectReference Include="../../src/CodeAtlas.Analysis.Core/CodeAtlas.Analysis.Core.csproj" />
+    <ProjectReference Include="../../src/CodeAtlas.Storage/CodeAtlas.Storage.csproj" />
+    <ProjectReference Include="../../src/CodeAtlas.Language.CSharp/CodeAtlas.Language.CSharp.csproj" />
+    <ProjectReference Include="../../src/CodeAtlas.Presentation/CodeAtlas.Presentation.csproj" />
+    <ProjectReference Include="../../src/CodeAtlas.Composition/CodeAtlas.Composition.csproj" />
+  </ItemGroup>
+</Project>

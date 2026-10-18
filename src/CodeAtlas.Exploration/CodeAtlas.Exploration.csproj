@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup><ProjectReference Include="../CodeAtlas.Contracts/CodeAtlas.Contracts.csproj" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="../../docs/architecture-standard.v1.json" LogicalName="CodeAtlas.ArchitectureStandard.json" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="../../docs/standards/A*.md"><LogicalName>CodeAtlas.Standards.%(Filename)%(Extension)</LogicalName></EmbeddedResource></ItemGroup>
+</Project>

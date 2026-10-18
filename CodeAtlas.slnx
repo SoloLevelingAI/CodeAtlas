@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CodeAtlas.Analysis.Core/CodeAtlas.Analysis.Core.csproj" />
+    <Project Path="src/CodeAtlas.Application/CodeAtlas.Application.csproj" />
+    <Project Path="src/CodeAtlas.Automation/CodeAtlas.Automation.csproj" />
+    <Project Path="src/CodeAtlas.Cli/CodeAtlas.Cli.csproj" />
+    <Project Path="src/CodeAtlas.Composition/CodeAtlas.Composition.csproj" />
+    <Project Path="src/CodeAtlas.Contracts/CodeAtlas.Contracts.csproj" />
+    <Project Path="src/CodeAtlas.Desktop/CodeAtlas.Desktop.csproj" />
+    <Project Path="src/CodeAtlas.Exploration/CodeAtlas.Exploration.csproj" />
+    <Project Path="src/CodeAtlas.Framework/CodeAtlas.Framework.csproj" />
+    <Project Path="src/CodeAtlas.Host/CodeAtlas.Host.csproj" />
+    <Project Path="src/CodeAtlas.Language.CSharp/CodeAtlas.Language.CSharp.csproj" />
+    <Project Path="src/CodeAtlas.Presentation/CodeAtlas.Presentation.csproj" />
+    <Project Path="src/CodeAtlas.Runtime/CodeAtlas.Runtime.csproj" />
+    <Project Path="src/CodeAtlas.Storage/CodeAtlas.Storage.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CodeAtlas.Desktop.Regression/CodeAtlas.Desktop.Regression.csproj" />
+    <Project Path="tests/CodeAtlas.Regression/CodeAtlas.Regression.csproj" />
+  </Folder>
+</Solution>

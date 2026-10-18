@@ -1,0 +1,50 @@
+@namespace CodeAtlas.Presentation.Components
+<article class="branch-card @(Branch.Depth == 0 ? "module-card" : "") @(Selected ? "is-selected" : "")" data-branch="@Branch.Key" data-depth="@Branch.Depth">
+    <div class="branch-heading">
+        @if (Tree.ChildCount(Branch) > 0)
+        {
+            <button class="branch-chevron" data-tree-expand="@Branch.Key" aria-expanded="@Tree.IsExpanded(Branch.Key)" aria-label="@((Tree.IsExpanded(Branch.Key) ? "收起 " : "展开 ") + Branch.Node.Name)" @onclick="() => OnToggle.InvokeAsync(Branch)">@(Tree.IsExpanded(Branch.Key) ? "⌄" : "›")</button>
+        }
+        else { <span class="branch-terminal">·</span> }
+        <button class="branch-select" data-tree-select="@Branch.Node.Id" @onclick="() => OnSelect.InvokeAsync(Branch)">
+            <span class="branch-title">@Branch.Node.Name</span><span class="branch-purpose">@Branch.Node.Purpose</span>
+        </button>
+        <span class="branch-kind">@(Branch.Depth == 0 ? "模块" : Branch.Node.FeatureId is not null ? "子功能" : Tree.ChildCount(Branch) > 0 ? "类型" : "成员")</span>
+    </div>
+    <div class="branch-meta"><span>@(Tree.ChildCount(Branch) > 0 ? $"{Tree.ChildCount(Branch)} 个下级" : "末级 · 源码可查")</span>
+        @if (Relations.Length > 0) { <button class="branch-relations-toggle" data-tree-relations="@Branch.Key" aria-expanded="@relationsOpen" @onclick="() => relationsOpen = !relationsOpen">@(relationsOpen ? "收起关联" : $"↗ {Relations.Length} 项关联")</button> }
+    </div>
+    @if (relationsOpen)
+    {
+        <div class="branch-relations"><div class="relations-caption">当前可见层的静态关系 · 点击查看源码证据</div>
+            @foreach (FocusEdge edge in Relations.Take(relationLimit)) { <button @onclick="() => OnRelation.InvokeAsync(edge.EvidenceIndex)"><span>@(edge.From == Branch.Key ? "依赖 → " : "引用 ← ")@TargetName(edge)</span><small>@edge.Count 条证据</small></button> }
+            @if (Relations.Length > relationLimit) { <button @onclick="() => relationLimit += 6">继续显示关联（剩余 @(Relations.Length - relationLimit) 项）</button> }
+        </div>
+    }
+    @if (Tree.IsExpanded(Branch.Key))
+    {
+        <div class="branch-children" data-children-of="@Branch.Key">
+            @foreach (MapBranch child in Tree.Branches.Where(item => item.ParentKey == Branch.Key))
+            {
+                <BranchCard @key="child.Key" Tree="Tree" Branch="child" SelectedSymbol="@SelectedSymbol" SelectedFeature="@SelectedFeature" OnToggle="OnToggle" OnSelect="OnSelect" OnMore="OnMore" OnRelation="OnRelation" />
+            }
+            @if (Tree.Remaining(Branch) > 0) { <button class="branch-more" @onclick="() => OnMore.InvokeAsync(Branch)">＋ 再显示 6 项 · 剩余 @Tree.Remaining(Branch)</button> }
+        </div>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired] public ExpandableMap Tree { get; set; } = default!;
+    [Parameter, EditorRequired] public MapBranch Branch { get; set; } = default!;
+    [Parameter] public string? SelectedSymbol { get; set; }
+    [Parameter] public string? SelectedFeature { get; set; }
+    [Parameter] public EventCallback<MapBranch> OnToggle { get; set; }
+    [Parameter] public EventCallback<MapBranch> OnSelect { get; set; }
+    [Parameter] public EventCallback<MapBranch> OnMore { get; set; }
+    [Parameter] public EventCallback<int> OnRelation { get; set; }
+    private bool relationsOpen;
+    private int relationLimit = 6;
+    private bool Selected => Branch.Node.SymbolId is { } id ? id == SelectedSymbol : SelectedSymbol is null && Branch.Node.FeatureId == SelectedFeature;
+    private FocusEdge[] Relations => Tree.Edges.Where(edge => edge.From == Branch.Key || edge.To == Branch.Key).ToArray();
+    private string TargetName(FocusEdge edge) => Tree.Branches.First(branch => branch.Key == (edge.From == Branch.Key ? edge.To : edge.From)).Node.Name;
+}

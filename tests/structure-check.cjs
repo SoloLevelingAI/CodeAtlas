@@ -1,0 +1,56 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+(async()=>{
+ const browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE||undefined});
+ const page=await browser.newPage({viewport:{width:1600,height:1000}});
+ const errors=[],passed=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ const check=(ok,label)=>{assert(ok,label);passed.push(label);console.log('PASS '+label);};
+ const expand=async key=>{await page.locator(`[data-tree-expand="${key}"]`).click();await page.waitForTimeout(80);};
+ try{
+  await page.goto('http://127.0.0.1:5278',{waitUntil:'networkidle'});
+  check(await page.locator('#structure-tree').isVisible() && !await page.locator('#feature-map').isVisible(),'nested structure is default and diagram is opt-in');
+  await page.screenshot({path:'artifacts/CodeAtlas-structure-overview.png',fullPage:true});
+  const root='f:atlas.analysis', child=root+'/f:atlas.analysis.inventory';
+  const before=await page.locator(`[data-tree-expand="${root}"]`).boundingBox();
+  await expand(root);
+  check(await page.locator(`[data-children-of="${root}"] > [data-branch]`).count()===3,'child features appear inside parent group');
+  const after=await page.locator(`[data-tree-expand="${root}"]`).boundingBox();
+  check(before.x===after.x && before.y===after.y,'parent header remains anchored while expanding');
+  await expand(child);
+  await page.locator('[data-tree-select="f:atlas.analysis.inventory"]').click();
+  await page.waitForFunction(()=>document.querySelector('.inspector h1')?.textContent==='盘点源码');
+  const type=child+'/s:T:CodeAtlas.Storage.SourceRepository';
+  await expand(type);
+  const method=page.locator(`[data-children-of="${type}"] > [data-branch]`).filter({has:page.locator('.branch-title',{hasText:'ReadAsync'})});
+  await method.locator('.branch-select').click();
+  await page.waitForFunction(()=>document.querySelector('.inspector h1')?.textContent==='ReadAsync');
+  check(await method.locator('.branch-chevron').count()===0,'method selection is terminal and keeps source detail');
+  check(await method.evaluate(node=>node.classList.contains('is-selected')),'selected method is highlighted in nested structure');
+  check(await page.locator('#structure-tree').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'deep expansion fits panel width without horizontal overflow');
+  await page.screenshot({path:'artifacts/CodeAtlas-structure-method.png',fullPage:true});
+  const keys=await page.locator('[data-branch]').evaluateAll(nodes=>nodes.map(node=>node.dataset.branch));
+  await page.locator('#diagram-mode').click();
+  await page.locator('#feature-map').waitFor({state:'visible'});
+  check(await page.locator('#feature-map').isVisible(),'diagram remains available');
+  await page.locator('#structure-mode').click();
+  await page.locator('#structure-tree').waitFor({state:'visible'});
+  check(JSON.stringify(await page.locator('[data-branch]').evaluateAll(nodes=>nodes.map(node=>node.dataset.branch)))===JSON.stringify(keys),'view switch preserves all expanded branches');
+  await expand(root);await expand(root);
+  check(await page.locator(`[data-children-of="${type}"]`).count()===1,'collapse and reopening restores deep expansion');
+  await method.locator(':scope > .branch-meta > .branch-relations-toggle').click();
+  const relation=method.locator(':scope > .branch-relations > button').first();
+  await relation.click();
+  await page.waitForFunction(()=>document.querySelector('.inspector h1')?.textContent.includes('→'));
+  check(await page.locator('#source-code').count()===1,'inline dependency opens source evidence without leaving structure');
+  await page.locator('#search').fill('ReadAsync');
+  await page.locator('.explorer').waitFor({state:'visible'});
+  check(await page.locator('.explorer').isVisible(),'search opens code directory automatically');
+  await page.setViewportSize({width:1200,height:900});
+  check(await page.locator('#structure-tree').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'nested groups remain bounded at narrower desktop size');
+  check(errors.length===0,'no browser errors');
+  fs.writeFileSync('artifacts/structure-check.json',JSON.stringify({status:'passed',assertions:passed.length,passed},null,2));
+ }catch(e){await page.screenshot({path:'artifacts/structure-failure.png',fullPage:true});throw e;}
+ finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});

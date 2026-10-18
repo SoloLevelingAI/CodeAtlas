@@ -1,0 +1,179 @@
+@namespace CodeAtlas.Presentation.Components
+<div class="shell">
+    <aside class="rail">
+        <div class="brand">Code <em>Atlas</em></div><div class="brand-sub">功能结构与源码证据</div>
+        <div class="rail-caption">我现在要做什么</div>
+        <button id="graph-panel" class="@(Vm.State.Panel == "graph" ? "active" : "")" @onclick='() => ChangeAsync(() => Vm.SetPanel("graph"))'>⌘　理解功能</button>
+        <button id="quality-panel" class="@(Vm.State.Panel == "quality" ? "active" : "")" @onclick='() => ChangeAsync(() => Vm.SetPanel("quality"))'>◉　检查结构</button>
+        <button id="pending-panel" class="@(Vm.State.Panel == "pending" ? "active" : "")" @onclick='() => ChangeAsync(() => Vm.SetPanel("pending"))'>▣　补齐说明</button>
+        <button id="unsupported" class="@(Vm.State.Panel == "unsupported" ? "active" : "")" @onclick='() => ChangeAsync(() => Vm.SetPanel("unsupported"))'>△　分析盲区</button>
+        <div class="rail-caption">固定位置</div>
+        <div class="pins">@foreach (string pin in Vm.Pins) { <button @onclick="() => ChangeAsync(() => Vm.Select(pin))">★ @NodeName(pin)</button> }</div>
+        <footer>功能 → 子功能 → 类型 → 方法<br />技术职责在功能内部查看<br />源码声明是组织依据</footer>
+    </aside>
+    <main>
+        <header class="topbar"><div><strong>每个功能，都有自己的上下文。</strong><small>按任务组织实现、契约、界面和数据；逐层理解代码。</small></div>
+            <select id="report-select" value="@Report?.Id" @onchange="ChangeReportAsync" disabled="@Vm.IsBusy" aria-label="选择报告">
+                @foreach (ReportSummary report in Vm.Workspace?.Reports ?? []) { <option value="@report.Id">@report.Name</option> }
+            </select>
+            @foreach (WorkspaceAction action in Vm.Workspace?.Actions ?? []) { <button id="workspace-action" @onclick="() => ExecuteAsync(action.Id)" disabled="@Vm.IsBusy">@(Vm.IsBusy ? "分析中…" : action.Label)</button> }
+        </header>
+        @if (Vm.Error is not null) { <div class="error-banner">@Vm.Error</div> }
+        @if (Report is null) { <div class="loading">@(Vm.IsBusy ? "正在载入工作区…" : "先生成一份分析报告。")</div> }
+        else
+        {
+            <div class="navigation">
+                <button id="back" title="返回上次浏览位置" @onclick="() => ChangeAsync(Vm.Back)" disabled="@(!Vm.CanBack)">← 返回</button>
+                <button id="forward" title="前进" @onclick="() => ChangeAsync(Vm.Forward)" disabled="@(!Vm.CanForward)">→</button>
+                <button id="up-level" disabled="@(Vm.State.FeatureId is null && Vm.State.ClassId is null)" @onclick="() => ChangeAsync(Vm.UpLevel)">↑ 上一级</button>
+                <button id="all-features" class="crumb" @onclick="() => ChangeAsync(() => Vm.SetFeature(null))">功能总览</button>
+                @foreach (FeatureDefinition crumb in Vm.FeaturePath(Vm.State.FeatureId)) { <span>›</span><button class="crumb" data-crumb="@crumb.Id" @onclick="() => ChangeAsync(() => Vm.SetFeature(crumb.Id))">@crumb.Name</button> }
+                @if (Vm.CurrentClass is { } currentClass) { <span>›</span><button class="crumb" @onclick="() => ChangeAsync(() => Vm.Select(currentClass.Id))">@currentClass.Name</button> }
+                <div class="searchbox"><span>⌕</span><input id="search" value="@Vm.State.Query" @oninput="Search" placeholder="@(Vm.CurrentFeature is null ? "按用途、名称或文件搜索" : "在当前功能内搜索")" /><button @onclick='() => Vm.SetQuery("")'>×</button></div>
+            </div>
+            <div class="workbench @(!diagramMode && !showDirectory && Vm.State.Panel == "graph" ? "compact-directory" : "")">
+                <section class="map panel">
+                    <div class="panel-head focus-heading"><div class="section-eyebrow">01 / ARCHITECTURE</div><strong>功能结构</strong><span>从模块到实现，在同一处展开理解。</span></div>
+                    <div class="map-path"><div class="view-segments"><button id="structure-mode" class="@(!diagramMode ? "active" : "")" aria-pressed="@(!diagramMode)" @onclick="() => diagramMode = false">嵌套结构</button><button id="diagram-mode" class="@(diagramMode ? "active" : "")" aria-pressed="@diagramMode" @onclick="() => diagramMode = true">关系连线</button></div><button id="toggle-directory" aria-pressed="@showDirectory" @onclick="() => showDirectory = !showDirectory">@(showDirectory ? "收起目录" : "代码目录")</button><button id="collapse-map" @onclick="Tree.CollapseAll">收起全部</button></div>
+                    <div id="structure-tree" class="structure-tree" hidden="@diagramMode">
+                        <div class="structure-intro"><span class="live-dot"></span> @Vm.RootFeatures.Length 个模块 <span>独立展开 · 按需溯源</span></div>
+                        @foreach (MapBranch root in Tree.Branches.Where(branch => branch.ParentKey is null))
+                        {
+                            <BranchCard @key="root.Key" Tree="Tree" Branch="root" SelectedSymbol="@Vm.State.SelectedId" SelectedFeature="@Vm.State.FeatureId" OnToggle="Tree.Toggle" OnSelect="SelectBranch" OnMore="Tree.More" OnRelation="index => ChangeAsync(() => Vm.SelectRelation(index))" />
+                        }
+                    </div>
+                    <div class="map-canvas" hidden="@(!diagramMode)">
+                        <svg id="feature-map" viewBox="@MapViewBox" style="width:@(CanvasWidth.ToString(CultureInfo.InvariantCulture))px;height:@(CanvasHeight.ToString(CultureInfo.InvariantCulture))px" aria-label="原地展开关系图">
+                            <defs><marker id="dependency-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#688f84" /></marker></defs>
+                            <g id="map-viewport" transform="@Transform">
+                                @foreach (MapBranch branch in Tree.Branches.Where(branch => branch.ParentKey is not null))
+                                { <path class="ownership-line" data-parent-edge="@branch.Key" d="@BranchPath(branch.ParentKey!, branch.Key)"><title>父子归属 · 不是调用</title></path> }
+                                @if (showDependencies)
+                                {
+                                    @foreach (FocusEdge edge in Tree.Edges)
+                                    { <g class="map-edge" data-focus-edge="@edge.From|@edge.To" @onclick="() => ChangeAsync(() => Vm.SelectRelation(edge.EvidenceIndex))" @onclick:stopPropagation><title>@edge.Count 条静态关系 · 点击查看源码</title><path class="edge-hit" d="@BranchPath(edge.From, edge.To)" /><path class="edge-stroke" d="@BranchPath(edge.From, edge.To)" marker-end="url(#dependency-arrow)" /></g> }
+                                }
+                                @foreach (MapBranch branch in Tree.Branches)
+                                {
+                                    <g @key="branch.Key" class="map-node @((branch.Node.SymbolId is not null && branch.Node.SymbolId == Vm.State.SelectedId) || (branch.Node.FeatureId is not null && branch.Node.FeatureId == Vm.State.FeatureId && Vm.Selected is null) ? "selected" : "")" data-map-id="@branch.Key" data-map-feature="@branch.Node.FeatureId" data-map-symbol="@branch.Node.SymbolId" transform="translate(@branch.X @branch.Y)">
+                                        <g class="node-select" role="button" tabindex="0" @onclick="() => SelectBranch(branch)" @onclick:stopPropagation @onkeydown="(KeyboardEventArgs e) => SelectBranchKey(e, branch)">
+                                            <title>@branch.Node.Name · @branch.Node.Purpose</title><rect width="252" height="92" rx="12" /><text x="16" y="22" class="node-meta">@branch.Node.Kind · @(Tree.ChildCount(branch) > 0 ? $"{Tree.ChildCount(branch)} 个下级" : "末级 · 查看详情")</text><text x="16" y="48" class="node-title">@ShortLabel(branch.Node.Name, 21)</text><text x="16" y="73" class="node-sub">@ShortLabel(branch.Node.Purpose, 34)</text>
+                                        </g>
+                                        @if (Tree.ChildCount(branch) > 0)
+                                        {
+                                            <g class="expand-control" data-expand="@branch.Key" role="button" tabindex="0" aria-label="@((Tree.IsExpanded(branch.Key) ? "收起 " : "展开 ") + branch.Node.Name)" aria-expanded="@Tree.IsExpanded(branch.Key)" @onclick="() => Tree.Toggle(branch)" @onclick:stopPropagation @onkeydown='(KeyboardEventArgs e) => { if (e.Key is "Enter" or " ") Tree.Toggle(branch); }' @onkeydown:stopPropagation>
+                                                <rect x="215" y="9" width="28" height="28" rx="6" /><text x="229" y="29" text-anchor="middle">@(Tree.IsExpanded(branch.Key) ? "−" : "+")</text>
+                                            </g>
+                                        }
+                                        @if (Tree.IsExpanded(branch.Key) && Tree.Remaining(branch) > 0)
+                                        {
+                                            <g class="expand-more" data-more="@branch.Key" role="button" tabindex="0" @onclick="() => Tree.More(branch)" @onclick:stopPropagation @onkeydown='(KeyboardEventArgs e) => { if (e.Key is "Enter" or " ") Tree.More(branch); }'><rect x="8" y="94" width="220" height="17" rx="4" /><text x="16" y="107">继续展开（剩余 @Tree.Remaining(branch) 项）</text></g>
+                                        }
+                                    </g>
+                                }
+                            </g>
+                        </svg>
+                    </div>
+                    <div class="map-bottom" hidden="@(!diagramMode)"><div class="map-legend"><button id="toggle-dependencies" aria-pressed="@showDependencies" @onclick="() => showDependencies = !showDependencies">@(showDependencies ? "隐藏依赖" : "显示依赖")</button><span>┄ 归属　→ 依赖</span></div><div class="map-controls"><button id="zoom-out" @onclick="() => Zoom(-.1)">−</button><button id="map-fit" @onclick="() => mapViewport = new()">重置视野</button><button id="zoom-in" @onclick="() => Zoom(.1)">＋</button></div></div>
+                    <div class="overview-map"><div><b>全局小地图</b><span>当前位置始终保留<br />点击模块查看详情</span></div><svg id="overview-map" viewBox="@MiniViewBox" aria-label="全局模块小地图">
+                        @foreach (FeatureConnection edge in Connections()) { <path class="mini-edge" d="@EdgePath(edge)" /> }
+                        @foreach (FeaturePlacement place in Placements)
+                        {
+                            <g class="map-node @(Vm.State.FeatureId is not null && Vm.RootOf(Vm.State.FeatureId) == place.Feature.Id ? "selected focus" : "")" data-feature="@place.Feature.Id" transform="translate(@place.X @place.Y)" @onclick="() => ChangeAsync(() => Vm.SetFeature(place.Feature.Id))" tabindex="0" role="button" @onkeydown="(KeyboardEventArgs e) => OpenFeatureKey(e, place.Feature.Id)"><title>@place.Feature.Purpose</title><rect width="184" height="62" rx="9" /><text x="92" y="38" text-anchor="middle" class="node-title">@place.Feature.Name</text></g>
+                        }
+                    </svg></div>
+                </section>
+                <section class="explorer panel" hidden="@(!diagramMode && !showDirectory && Vm.State.Panel == "graph")">
+                    <div class="panel-head"><strong>02 / @PageTitle</strong><span class="page-purpose">@PagePurpose</span></div>
+                    @if (Vm.State.Panel == "graph")
+                    {
+                        <div class="level-toolbar"><button id="list-up" disabled="@(Vm.State.FeatureId is null && Vm.State.ClassId is null)" @onclick="() => ChangeAsync(Vm.UpLevel)">↑ @(Vm.CurrentClass is not null && Vm.Selected?.Id != Vm.CurrentClass.Id ? "所属类型" : Vm.CurrentClass is not null ? "所属功能" : "父功能")</button><small>@(Vm.CurrentClass is not null ? "成员只查看详情，不进入空白下级" : "功能 → 类型 → 成员")</small></div>
+                        <div class="local-perspective"><span>当前功能内优先看</span><button id="feature-view" class="@(Vm.State.Perspective == ExplorationPerspective.Feature ? "active" : "")" @onclick="() => ChangeAsync(() => Vm.SetPerspective(ExplorationPerspective.Feature))">实现</button><button id="interaction-view" class="@(Vm.State.Perspective == ExplorationPerspective.Interaction ? "active" : "")" @onclick="() => ChangeAsync(() => Vm.SetPerspective(ExplorationPerspective.Interaction))">交互</button><button id="data-view" class="@(Vm.State.Perspective == ExplorationPerspective.Data ? "active" : "")" @onclick="() => ChangeAsync(() => Vm.SetPerspective(ExplorationPerspective.Data))">数据</button></div>
+                        @if (Vm.State.Scope is not null) { <div class="list-tools"><small>只看 @RoleName(Vm.State.Scope)</small><button @onclick="() => ChangeAsync(() => Vm.SetScope(null))">显示本功能所有职责</button></div> }
+                    }
+                    <div class="scroll-list" id="explorer-list">
+                        @if (Vm.State.Panel == "graph")
+                        {
+                            @foreach (FeatureDefinition child in Vm.ChildFeatures())
+                            {
+                                <button @key="child.Id" class="feature-card" data-child="@child.Id" @onclick="() => ChangeAsync(() => Vm.SetFeature(child.Id))"><div><span class="tiny-tag">@(child.Kind == FeatureKind.Page ? "页面" : child.Kind == FeatureKind.Module ? "模块" : "子功能")</span><b>@child.Name</b><i>→</i></div><p>@child.Purpose</p><small>@Vm.FeatureCount(child.Id) 个元素 · @Vm.Features.Count(feature => feature.ParentId == child.Id) 个下级</small></button>
+                            }
+                            @foreach (var group in Vm.VisibleNodes().GroupBy(node => (node.Feature, node.Role, Category: Vm.CurrentClass is null ? "类型与契约" : node.Kind is "method" or "constructor" ? "方法与操作" : "字段与属性")).OrderBy(group => group.Key.Category == "方法与操作" ? 0 : 1))
+                            {
+                                <div class="group-label">@Vm.FeatureLabel(group.Key.Feature)<span>@RoleName(group.Key.Role) · @group.Key.Category</span></div>
+                                @foreach (CodeNode node in group)
+                                {
+                                    <button @key="node.Id" class="entry @(node.Id == Vm.State.SelectedId ? "selected" : "")" data-node="@node.Id" @onclick="() => ChangeAsync(() => Vm.Select(node.Id))"><b class="entry-purpose">@(string.IsNullOrWhiteSpace(node.Summary) ? "用途未说明 · 需要补充" : node.Summary)</b><span class="symbol-name">@node.Name</span><small>@node.Kind · @RoleName(node.Role)</small></button>
+                                }
+                            }
+                            @if (Vm.MatchingNodeCount > 30) { <div class="pagination"><button disabled="@(Vm.State.Page == 0)" @onclick="() => ChangeAsync(() => Vm.SetPage(Vm.State.Page - 1))">上一页</button><span>@(Vm.State.Page + 1) / @((Vm.MatchingNodeCount + 29) / 30) · @Vm.MatchingNodeCount 项</span><button disabled="@((Vm.State.Page + 1) * 30 >= Vm.MatchingNodeCount)" @onclick="() => ChangeAsync(() => Vm.SetPage(Vm.State.Page + 1))">下一页</button></div> }
+                            @if (Vm.MatchingNodeCount == 0 && Vm.ChildFeatures().Length == 0) { <div class="empty"><b>@(!string.IsNullOrWhiteSpace(Vm.State.Query) ? "当前筛选没有匹配项" : Vm.CurrentClass is not null ? "此类型在当前功能下没有已索引成员" : "当前功能尚未声明下级代码")</b><p>源码与用途仍保留在右侧；自动生成或未支持的成员不会被虚构为下级。</p><div class="empty-actions"><button @onclick="() => ChangeAsync(Vm.UpLevel)">↑ 返回上一级</button>@if (!string.IsNullOrWhiteSpace(Vm.State.Query)) { <button id="clear-empty-query" @onclick='() => Vm.SetQuery("")'>清空搜索</button> }<button @onclick='() => ChangeAsync(() => Vm.SetPanel("pending"))'>查看结构缺口</button></div></div> }
+                        }
+                        else
+                        {
+                            @foreach (var group in Findings().GroupBy(item => item.Finding.Rule))
+                            {
+                                <details @key="group.Key" class="finding-group" data-rule="@group.Key" open="@expandedRules.Contains(group.Key)"><summary @onclick="() => ToggleRule(group.Key)" @onclick:preventDefault>@group.Key · @RuleName(group.Key)<b>@group.Count()</b></summary>
+                                    @if (expandedRules.Contains(group.Key))
+                                    {
+                                        @foreach (var item in group.Take(findingLimits.GetValueOrDefault(group.Key, 50))) { <button @key="item.Index" class="entry finding @item.Finding.Severity.ToString().ToLowerInvariant()" data-finding="@item.Index" @onclick="() => ChangeAsync(() => Vm.SelectFinding(item.Index))"><b>@item.Finding.Rule · @item.Finding.Severity</b><span>@item.Finding.Message</span><small>@item.Finding.Source.Path : @item.Finding.Source.Line</small></button> }
+                                        @if (group.Count() > findingLimits.GetValueOrDefault(group.Key, 50)) { <button class="source-toggle" @onclick="() => MoreFindings(group.Key)">再显示 50 项（共 @group.Count() 项）</button> }
+                                    }
+                                </details>
+                            }
+                            @if (!Findings().Any()) { <div class="empty">当前查询未发现匹配的问题；支持覆盖仍需单独查看。</div> }
+                        }
+                    </div>
+                </section>
+                <section class="inspector panel"><div class="detail-head"><span>03 / 用途、上下文与证据</span><button id="pin" disabled="@(Vm.Selected is null)" @onclick="Vm.TogglePin">@(Vm.State.SelectedId is { } selected && Vm.Pins.Contains(selected) ? "★ 已固定" : "☆ 固定")</button></div>
+                    <div class="detail-body" id="detail-body">
+                        @if (Finding is { } finding)
+                        {
+                            <span class="badge amber">@finding.Rule · @finding.Severity</span><h1>@(finding.Severity == FindingSeverity.Unsupported ? "明确暂不支持" : RuleName(finding.Rule))</h1><p class="description purpose-text">@finding.Message</p><div class="note">问题与修改建议来自声明和源码检查。原始位置保留；缺失信息不会被自动猜测填补。</div>
+                        }
+                        else if (Relation is { } relation)
+                        {
+                            <span class="badge">@KindName(relation.Kind)</span><h1>@NodeName(relation.From) → @NodeName(relation.To)</h1><p class="description">@relation.Evidence</p><div class="note">这是具体源码证据。接口调用、提供方声明和实际注册分别呈现，不冒充运行时调用。</div><button class="relation" @onclick="() => ChangeAsync(() => Vm.Select(relation.To))">进入目标的功能上下文 →</button>
+                        }
+                        else if (Vm.Selected is { } node)
+                        {
+                            <span class="badge">@RoleName(node.Role) · @node.Kind</span><h1>@node.Name</h1><p id="node-summary" class="purpose-text">@(string.IsNullOrWhiteSpace(node.Summary) ? "缺少用途说明：请在此声明上添加 XML <summary>，说明它完成的任务。" : node.Summary)</p><p class="description symbol">@node.Symbol</p>
+                            <div class="facts"><div><span>功能路径</span><b>@Vm.FeatureLabel(node.Feature)</b></div><div><span>在本功能中的职责</span><b>@RoleName(node.Role)</b></div><div><span>作用声明</span><b>@node.Effect</b></div><div><span>说明来源</span><b>@(string.IsNullOrWhiteSpace(node.Summary) ? "未提供" : "源码 XML 文档注释")</b></div></div>
+                            @if (!string.IsNullOrWhiteSpace(node.Inputs)) { <h3>输入 · 参数含义</h3><p class="io-description">@node.Inputs</p><h3>输出 · 返回约定</h3><p class="io-description">@node.Outputs</p> }
+                            @if (Report.Findings.Any(item => item.NodeId == node.Id)) { <div class="note">此元素有 @Report.Findings.Count(item => item.NodeId == node.Id) 项待确认问题。<button @onclick='() => ChangeAsync(() => Vm.SetPanel("quality"))'>查看问题清单</button></div> }
+                        }
+                        else if (Vm.State.Panel != "graph")
+                        {
+                            <span class="badge amber">全仓库检查 · 保留原有探索路径</span><h1>@PageTitle</h1><p class="purpose-text">@PagePurpose</p><div class="facts"><div><span>输入</span><b>当前报告中的源码、声明和分析证据</b></div><div><span>完成结果</span><b>定位具体问题，了解修改方式或分析限制</b></div></div><div class="note">左侧按问题类型折叠组织。展开一类，再选择具体问题查看来源；可按名称、文件或规则编号搜索。返回会恢复先前的功能查找位置。</div>
+                        }
+                        else if (Vm.CurrentFeature is { } feature)
+                        {
+                            <span class="badge green">@(feature.Kind == FeatureKind.Page ? "页面任务" : "功能任务") · @feature.Id</span><h1>@feature.Name</h1><p class="purpose-text">@feature.Purpose</p>
+                            <div class="facts"><div><span>输入 / 前置条件</span><b>@(feature.Inputs.Length > 0 ? feature.Inputs : "由下级功能声明")</b></div><div><span>结果 / 完成标志</span><b>@(feature.Outputs.Length > 0 ? feature.Outputs : "由下级功能声明")</b></div></div>
+                            <h3>本功能内部的协作职责</h3><div class="role-chips">@foreach (var group in Report.Graph.Nodes.Where(node => Vm.BelongsTo(node.Feature, feature.Id)).GroupBy(node => node.Role).OrderBy(group => group.Key)) { <button data-role-filter="@group.Key" @onclick="() => ChangeAsync(() => Vm.SetScope(group.Key))">@RoleName(group.Key) <b>@group.Count()</b></button> }</div>
+                            <div class="note">@Vm.FeatureCount(feature.Id) 个代码元素属于此功能及其下级。左侧继续进入子功能；在叶层查看类型，再进入具体方法。</div>
+                        }
+                        else
+                        {
+                            <span class="badge green">@Report.Name</span><h1>选择要理解的功能。</h1><p class="purpose-text">从模块进入子功能或页面，再查看它自己的类型与方法。介绍和输入输出随源码一起维护。</p>
+                            <div class="quality-stats"><div><span>职责与层级错误</span><strong>@Report.Findings.Count(item => item.Severity == FindingSeverity.Error)</strong></div><div><span>归属与说明待完善</span><strong>@Report.Findings.Count(item => item.Severity == FindingSeverity.Warning)</strong></div></div>
+                            <div class="note">整齐的地图不能证明信息完整。缺少用途、错误层级、过大的方法集合都会列入检查清单；另有 @Report.Findings.Count(item => item.Severity == FindingSeverity.Unsupported) 项分析限制。</div>
+                            <h3>推荐浏览路径</h3><p class="description">源码分析 → 盘点源码 → SourceRepository → ReadAsync<br />报告管理 → 读写报告快照 → JsonReportRepository → SaveAsync<br />代码探索 → 功能地图页 → Explorer</p>
+                            <h3>支持能力与限制</h3>@foreach (SupportStatement support in Report.Support) { <div class="support"><b>@support.Capability <i>@support.Status</i></b><p>@support.Detail</p></div> }
+                        }
+                        @if (Source is { Path.Length: > 0 } source)
+                        {
+                            <h3>源码 · 原始位置</h3><div class="source-label">@source.Path : @source.Line</div><div class="code" id="source-code">@foreach (var line in SourceLines()) { <div class="code-line @(line.Number == source.Line ? "current" : "")"><span>@line.Number</span><code>@line.Text</code></div> }</div><button class="source-toggle" @onclick="Vm.ToggleFullSource">@(Vm.State.FullSource ? "只看附近" : "展开完整文件")</button>
+                        }
+                        @if (Vm.Selected is not null && Finding is null)
+                        {
+                            <h3>直接关系 · 最多展示 30 个不同目标</h3>
+                            @foreach (CodeRelation edge in SelectedRelations()) { int index = Report.Graph.Relations.IndexOf(edge); <button class="relation" @onclick="() => ChangeAsync(() => Vm.SelectRelation(index))"><b>@NodeName(edge.From) → @NodeName(edge.To)</b><small>@KindName(edge.Kind) · @edge.Source.Path : @edge.Source.Line</small></button> }
+                        }
+                    </div>
+                </section>
+            </div>
+            <footer class="status"><span>@Report.Coverage.CSharpFiles 个 C# 文件 · @Vm.Features.Length 个目录节点 · @Report.Coverage.Symbols 个代码元素</span><span>用途来自源码注释 · 层级来自显式声明 · 未支持内容保留</span></footer>
+        }
+    </main>
+</div>

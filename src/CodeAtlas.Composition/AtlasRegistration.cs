@@ -1,0 +1,29 @@
+using System.Reflection;
+using CodeAtlas.Framework;
+using Microsoft.Extensions.DependencyInjection;
+
+[assembly: AtlasModule("atlas.runtime.registration", "应用组合入口", ArchitecturalRole.Composition)]
+
+namespace CodeAtlas.Composition;
+
+public static class AtlasRegistration
+{
+    // Typed registration is composition glue. It does not leak the concrete provider into consumers.
+    public static IServiceCollection AddAtlas<TContract, TImplementation>(this IServiceCollection services,
+        Func<IServiceProvider, TImplementation>? factory = null)
+        where TContract : class
+        where TImplementation : class, TContract
+    {
+        if (!typeof(TContract).IsInterface || !typeof(TImplementation).GetCustomAttributes<AtlasProvidesAttribute>()
+            .Any(attribute => attribute.Contract == typeof(TContract)))
+        {
+            throw new InvalidOperationException($"{typeof(TImplementation).Name} 必须显式声明所提供的接口 {typeof(TContract).Name}。");
+        }
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(TContract)))
+        {
+            throw new InvalidOperationException("契约已有提供方：" + typeof(TContract).Name);
+        }
+        return factory is null ? services.AddSingleton<TContract, TImplementation>()
+            : services.AddSingleton<TContract>(provider => factory(provider));
+    }
+}

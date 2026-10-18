@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><AssemblyName>CodeAtlas.Cli</AssemblyName></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CodeAtlas.Runtime/CodeAtlas.Runtime.csproj" />
+    <ProjectReference Include="../CodeAtlas.Exploration/CodeAtlas.Exploration.csproj" />
+    <ProjectReference Include="../CodeAtlas.Automation/CodeAtlas.Automation.csproj" />
+  </ItemGroup>
+</Project>

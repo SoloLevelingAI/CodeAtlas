@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/CodeAtlas.Exploration/CodeAtlas.Exploration.csproj" />
+    <ProjectReference Include="../../src/CodeAtlas.Automation/CodeAtlas.Automation.csproj" />
+    <ProjectReference Include="../../src/CodeAtlas.Storage/CodeAtlas.Storage.csproj" />
+  </ItemGroup>
+</Project>

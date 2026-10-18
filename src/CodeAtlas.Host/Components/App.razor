@@ -1,0 +1,21 @@
+@namespace CodeAtlas.Host.Components
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <base href="/" />
+    <title>Code Atlas · 结构与质量</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232d806a'/%3E%3Ctext x='8' y='24' fill='white' font-size='24'%3EA%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="atlas.css" />
+    <link rel="stylesheet" href="hierarchy.css" />
+    <link rel="stylesheet" href="focus-map.css" />
+    <link rel="stylesheet" href="structure.css" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <script src="view-bridge.js"></script>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>
