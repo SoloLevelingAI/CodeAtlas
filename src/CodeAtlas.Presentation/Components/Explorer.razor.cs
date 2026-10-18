@@ -18,6 +18,7 @@ public partial class Explorer : ComponentBase, IAsyncDisposable
     [Parameter] public string? InitialNodeId { get; set; }
     [Parameter] public string? InitialFile { get; set; }
     [Parameter] public int InitialLine { get; set; }
+    [Parameter] public ResolvedProfile? RuntimeProfile { get; set; }
     private string? focusKey;
     private bool restorePending;
     private DotNetObjectReference<Explorer>? mapReference;
@@ -28,7 +29,12 @@ public partial class Explorer : ComponentBase, IAsyncDisposable
     private readonly HashSet<string> expandedRules = [];
     private readonly Dictionary<string, int> findingLimits = [];
     private ExpandableMap? expandable;
-    private ExpandableMap Tree => expandable ??= new(Vm);
+    private ExpandableMap? moduleTree;
+    private bool runtimeMode;
+    private string? selectedModuleId;
+    private string? SelectedFeatureId => runtimeMode ? selectedModuleId : Vm.State.FeatureId;
+    private ModuleDescriptor? SelectedModule => RuntimeProfile?.Modules.FirstOrDefault(module => module.Id == selectedModuleId);
+    private ExpandableMap Tree => runtimeMode ? moduleTree ??= new(Vm, RuntimeProfile) : expandable ??= new(Vm);
     private ViewportState mapViewport = new();
     private bool showDependencies = true;
     private bool diagramMode;
@@ -97,7 +103,8 @@ public partial class Explorer : ComponentBase, IAsyncDisposable
 
     private async Task ChangeAsync(Action change)
     {
-        await CaptureAsync();
+        if (!runtimeMode) await CaptureAsync();
+        runtimeMode = false;
         change();
         restorePending = true;
     }
@@ -155,15 +162,19 @@ public partial class Explorer : ComponentBase, IAsyncDisposable
     private void MoreFindings(string rule) => findingLimits[rule] = findingLimits.GetValueOrDefault(rule, 50) + 50;
 
     private Task OpenFeatureKey(KeyboardEventArgs args, string id) => args.Key is "Enter" or " " ? ChangeAsync(() => Vm.SetFeature(id)) : Task.CompletedTask;
-    private Task SelectBranch(MapBranch branch) => ChangeAsync(() =>
+    private Task SelectBranch(MapBranch branch)
     {
-        if (branch.Node.SymbolId is { } symbol)
+        if (runtimeMode) { selectedModuleId = branch.Node.FeatureId; return Task.CompletedTask; }
+        return ChangeAsync(() =>
         {
-            if (Vm.State.FeatureId != branch.Feature) Vm.SetFeature(branch.Feature);
-            Vm.Select(symbol);
-        }
-        else Vm.SetFeature(branch.Node.FeatureId);
-    });
+            if (branch.Node.SymbolId is { } symbol)
+            {
+                if (Vm.State.FeatureId != branch.Feature) Vm.SetFeature(branch.Feature);
+                Vm.Select(symbol);
+            }
+            else Vm.SetFeature(branch.Node.FeatureId);
+        });
+    }
     private Task SelectBranchKey(KeyboardEventArgs args, MapBranch branch) => args.Key is "Enter" or " " ? SelectBranch(branch) : Task.CompletedTask;
     private string BranchPath(string fromId, string toId)
     {

@@ -9,9 +9,9 @@
         <button class="branch-select" data-tree-select="@Branch.Node.Id" @onclick="() => OnSelect.InvokeAsync(Branch)">
             <span class="branch-title">@Branch.Node.Name</span><span class="branch-purpose">@Branch.Node.Purpose</span>
         </button>
-        <span class="branch-kind">@(Branch.Depth == 0 ? "模块" : Branch.Node.FeatureId is not null ? "子功能" : Tree.ChildCount(Branch) > 0 ? "类型" : "成员")</span>
+        <span class="branch-kind">@(Tree.IsRuntime ? Branch.Node.Kind : Branch.Depth == 0 ? "模块" : Branch.Node.FeatureId is not null ? "子功能" : Tree.ChildCount(Branch) > 0 ? "类型" : "成员")</span>
     </div>
-    <div class="branch-meta"><span>@(Tree.ChildCount(Branch) > 0 ? $"{Tree.ChildCount(Branch)} 个下级" : "末级 · 源码可查")</span>
+    <div class="branch-meta"><span>@(Tree.ChildCount(Branch) > 0 ? $"{Tree.ChildCount(Branch)} 个下级" : Tree.IsRuntime ? "逻辑模块 · 查看能力声明" : "末级 · 源码可查")</span>
         @if (Relations.Length > 0) { <button class="branch-relations-toggle" data-tree-relations="@Branch.Key" aria-expanded="@relationsOpen" @onclick="() => relationsOpen = !relationsOpen">@(relationsOpen ? "收起关联" : $"↗ {Relations.Length} 项关联")</button> }
     </div>
     @if (relationsOpen)

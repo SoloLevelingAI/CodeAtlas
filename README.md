@@ -1,5 +1,9 @@
 # Code Atlas
 
+[架构 0.2：可执行模块协议、Profile 与 Web 接线](docs/architecture-v0.2.md) 已在首轮实现。Web 默认 `--profile web`，在原地图切换“运行模块”查看本次启动的嵌套模块、能力与视图贡献；`serve --profile headless` 不接入探索服务或视图。原报告和 `AddAtlas` API 保持兼容。另见 [C4](docs/c4/modules.md)、[ADR](docs/adr/0001-startup-module-composition.md)、[PR #1 检视](docs/reviews/pr-1.md)。
+
+运行 `./scripts/verify-modules.ps1` 构建并验证模块/Profile 正反例、桌面状态和自分析；附加 `-Browser` 在独立端口启动两个 Profile，运行真实 Web 交互回归并截图。浏览器需 Playwright，可沿用 `PLAYWRIGHT_MODULE` / `BROWSER_EXECUTABLE`；只有在线漏洞源不可达时才使用 `-SkipNuGetAudit`。证据保存在 `artifacts/module-verification/`，历史报告只复制到该验证目录；浏览器支持 `ATLAS_URL` 和 `ATLAS_REPORT` 指定目标。
+
 独立、本地的 C# 结构与质量工作台。以自身源码作为第一份分析对象。
 
 **功能层级是主导航，技术职责是功能内部的分工。** 主地图按源码分析、代码探索、报告管理、质量检查、运行组装和共享基础组织。按“模块 → 子功能/页面 → 类型 → 方法”进入；实现、界面、契约与 CRUD 跟随其服务的功能，不混为全仓库职责清单。

@@ -1,3 +1,4 @@
+const atlasUrl=(route='/')=>{const url=new URL(route,process.env.ATLAS_URL||'http://127.0.0.1:5278');if(process.env.ATLAS_REPORT)url.searchParams.set('report',process.env.ATLAS_REPORT);return url.href;};
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -17,7 +18,7 @@ const assert = require('node:assert/strict');
   const child = async id => {await page.locator(`[data-child="${id}"]`).click();await page.waitForSelector(`[data-crumb="${id}"]`);};
   const select = async (id,name) => {await page.locator(`[data-node="${id}"]`).click();await heading(name);};
   try {
-    await page.goto(process.env.ATLAS_URL || 'http://127.0.0.1:5278', {waitUntil:'networkidle'});
+    await page.goto(atlasUrl(), {waitUntil:'networkidle'});
     await page.locator('#diagram-mode').click();
     await page.waitForSelector('#feature-map');
     await page.waitForFunction(() => !!window.Blazor && document.querySelector('#report-select')?.value === 'self');
@@ -79,7 +80,7 @@ const assert = require('node:assert/strict');
     await page.locator('[data-rule="AT200"] [data-finding]').first().click();
     await heading('明确暂不支持');
     check((await page.locator('#source-code').innerText()).includes('@namespace'),'unsupported source is retained');
-    await page.locator('#report-select').selectOption('z-launchdesk');
+    await page.locator('#report-select').selectOption(process.env.ATLAS_LEGACY_REPORT || 'z-launchdesk');
     await page.waitForSelector('[data-feature="__unassigned__"]');
     check((await page.locator('#overview-map .map-node').textContent()).includes('待归属代码'),'legacy report stays visible in explicit unassigned bucket');
     await page.locator('#report-select').selectOption('self');

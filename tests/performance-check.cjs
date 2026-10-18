@@ -1,3 +1,4 @@
+const atlasUrl=(route='/')=>{const url=new URL(route,process.env.ATLAS_URL||'http://127.0.0.1:5278');if(process.env.ATLAS_REPORT)url.searchParams.set('report',process.env.ATLAS_REPORT);return url.href;};
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -10,7 +11,7 @@ const assert = require('node:assert/strict');
   page.on('websocket', socket => {socket.on('framesent', () => sent++);socket.on('framereceived', () => received++);});
   const results = {};
   try {
-    await page.goto('http://127.0.0.1:5278', {waitUntil:'networkidle'});
+    await page.goto(atlasUrl(), {waitUntil:'networkidle'});
     await page.locator('#diagram-mode').click();
     await page.locator('[data-feature="atlas.analysis"]').click();
     await page.waitForSelector('[data-child="atlas.analysis.inventory"]');
