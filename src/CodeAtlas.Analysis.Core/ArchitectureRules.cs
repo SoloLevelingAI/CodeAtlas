@@ -14,7 +14,15 @@ public sealed class ArchitectureRules : IArchitectureRules
     /// <param name="graph">待检查的符号、功能目录与关系事实。</param>
     /// <returns>职责边界与层级说明的诊断列表。</returns>
     [AtlasOperation(EffectKind.Pure)]
-    public ImmutableArray<AnalysisFinding> Evaluate(SourceGraph graph)
+    public ImmutableArray<AnalysisFinding> Evaluate(SourceGraph graph) => EvaluateCore(graph);
+
+    /// <summary>对照目标模型。缺少模型时由漂移规则报告未知。</summary>
+    [AtlasOperation(EffectKind.Pure)]
+    public ImmutableArray<AnalysisFinding> CompareTarget(SourceGraph graph, TargetArchitecture? target, string? problem = null) =>
+        TargetDriftRules.Evaluate(graph, target, problem);
+
+    [AtlasOperation(EffectKind.Pure)]
+    private static ImmutableArray<AnalysisFinding> EvaluateCore(SourceGraph graph)
     {
         var findings = ImmutableArray.CreateBuilder<AnalysisFinding>();
         findings.AddRange(FeatureStructureRules.Evaluate(graph));

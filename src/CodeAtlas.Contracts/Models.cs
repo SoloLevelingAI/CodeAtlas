@@ -45,7 +45,8 @@ public sealed record AnalysisCoverage(int Files, int CSharpFiles, int Unsupporte
 [AtlasComponent("atlas.analysis.run", ArchitecturalRole.Contract)]
 public sealed record AnalysisReport(int SchemaVersion, string Id, string Name, string Root,
     DateTimeOffset AnalyzedAt, SourceGraph Graph, AnalysisCoverage Coverage,
-    ImmutableArray<AnalysisFinding> Findings, ImmutableArray<SupportStatement> Support);
+    ImmutableArray<AnalysisFinding> Findings, ImmutableArray<SupportStatement> Support,
+    TargetArchitecture? Target = null);
 
 public sealed record SupportStatement(string Capability, string Status, string Detail);
 /// <summary>报告列表需要的名称、标识与时间。</summary>
@@ -53,7 +54,7 @@ public sealed record SupportStatement(string Capability, string Status, string D
 public sealed record ReportSummary(string Id, string Name, DateTimeOffset AnalyzedAt);
 /// <summary>指定要分析的仓库及生成报告的名称和标识。</summary>
 [AtlasComponent("atlas.analysis.run", ArchitecturalRole.Contract)]
-public sealed record AnalysisRequest(string Id, string Name, string Root);
+public sealed record AnalysisRequest(string Id, string Name, string Root, string? TargetModelPath = null);
 /// <summary>后端提供的动作标识与界面名称，前端无需硬编码具体用例。</summary>
 [AtlasComponent("atlas.explore.workspace", ArchitecturalRole.Contract)]
 public sealed record WorkspaceAction(string Id, string Label);

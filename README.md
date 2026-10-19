@@ -89,7 +89,7 @@ Windows 上安装 .NET 10 SDK 和 Python 3.9+（检查 Markdown 与应用规范�
 
 打开 <http://127.0.0.1:5278>。仅本机监听。停止启动脚本即可停止服务。
 
-Web 版另有两个阅读页，和桌面「架构规范」使用同一份判断：<http://127.0.0.1:5278/standards> 列出 A01–A10 的要求、自动检查范围、映射规则和保守状态，证据链回代码地图或报告里的源码片段；<http://127.0.0.1:5278/division> 按功能内的职责切分可认领切片，把 AT101、AT105–AT110、AT118、AT130 标成交接风险，把 AT001、AT010 和未登记代码放进「待整理」。没有诊断不会显示为通过。报告目录里若有 LaunchDesk 阅读报告，页面右上角可以切换；没有该文件时只显示已保存的报告。
+Web 版另有阅读页，和桌面「架构规范」使用同一份判断：<http://127.0.0.1:5278/standards> 列出 A01–A10 的要求、自动检查范围、映射规则和保守状态，证据链回代码地图或报告里的源码片段；<http://127.0.0.1:5278/division> 按功能内的职责切分可认领切片，把 AT101、AT105–AT110、AT118、AT130 标成交接风险，把 AT001、AT010 和未登记代码放进「待整理」；<http://127.0.0.1:5278/architecture> 展示 LikeC4 导出的系统、宿主和模块图，旁边列出 AT122–AT127 漂移，并链回代码地图。没有诊断不会显示为通过。报告目录里若有 LaunchDesk 阅读报告，页面右上角可以切换；没有该文件时只显示已保存的报告。
 
 验证会构建所有项目（警告视为错误）、运行独立正反例、分析自身、保存 `artifacts/reports/self.json` 和验证记录。`artifacts/` 不进入 Git。
 
@@ -99,7 +99,7 @@ Web 版另有两个阅读页，和桌面「架构规范」使用同一份判断�
 dotnet ./src/CodeAtlas.Host/bin/Debug/net10.0/CodeAtlas.Host.dll analyze --root C:/YourRepository --id your-repository --name "你的项目" --reports ./artifacts/reports
 ```
 
-`check` 使用相同分析流水线；增加 `--require-complete` 可要求无未声明符号和未支持项；增加 `--require-structured` 可把用途、参数、返回说明和层级缺口作为失败条件。退出码：`0` 完成扫描且无已知规则错误，`2` 规则错误，`3` 严格模式覆盖不完整，`4` 结构/说明规范未满足，`64` 不支持的指令/选项，`1` 执行失败。**0 不等于信息已经完整**，默认模式仍会列出全部结构警告。
+`check` 使用相同分析流水线；增加 `--require-complete` 可要求无未声明符号和未支持项；增加 `--require-structured` 可把用途、参数、返回说明和层级缺口作为失败条件。`--target <model.json>` 指定另一份目标模型，缺省读取仓库里的 `docs/architecture/target-model.json`。`--warnings-baseline <file>` 要求警告条数不超过已提交基线，减少不算失败，新规则或变多则失败。退出码：`0` 完成扫描且无已知规则错误，`2` 规则错误，`3` 严格模式覆盖不完整，`4` 结构/说明规范未满足，`5` 警告超出基线，`64` 不支持的指令/选项，`1` 执行失败。**0 不等于信息已经完整**，默认模式仍会列出全部结构警告。本仓库的结构缺口仍在，因此 CI 使用警告基线，不使用 `--require-structured`。
 
 ## 实际分层
 
@@ -211,8 +211,12 @@ ViewModel 接收 `IExplorerWorkspace`：后端提供图数据和可用动作，V
 | AT108 / AT109 | 注册缺少 AtlasProvides / 同一端口有多个提供方 |
 | AT110 | 已能看见 AddAtlas 时，声明了提供方却没有注册 |
 | AT111 | 模块默认 ID 没有对应的 AtlasFeature，或模块声明无法读取 |
-| AT118 | 使用 AddSingleton/AddScoped/AddTransient，没有走 AddAtlas |
+| AT118 | 使用 AddSingleton/AddScoped/AddTransient，没有走 AddAtlas；测试项目除外，ViewModel 与 ResolvedProfile 走已写明的组合入口 |
 | AT120 / AT121 | 已实现规则缺少回归反例 / 规范映射与发射点不一致（只在独立回归中求值） |
+| AT122 | 没有目标模型或模型读失败；结果是未知，不是通过 |
+| AT123 / AT124 | 源码模块不在模型中 / 模型模块不见于功能目录 |
+| AT125 | 跨顶层模块使用了类型或调用，但模型没有声明依赖 |
+| AT126 / AT127 | 声明了能力却没有 AtlasProvides / 实现了能力却没有写入模型 |
 | AT130 | 交互状态的字段或属性保存了整份 SourceGraph / AnalysisReport 集合 |
 | AT200–AT207、AT209、AT210 | 不支持的语言、读取/编码问题、构建条件、运行时目标、无法确认语义等 |
 

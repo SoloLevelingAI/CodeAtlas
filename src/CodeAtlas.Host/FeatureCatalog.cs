@@ -12,6 +12,7 @@ using CodeAtlas.Framework;
 [assembly: AtlasFeature("atlas.explore.navigation.find", "按用途查找", "在当前功能范围搜索名称、用途和文件，按所属功能与职责呈现有限数量的结果。", "atlas.explore.navigation")]
 [assembly: AtlasFeature("atlas.explore.navigation.history", "恢复浏览位置", "返回或前进时恢复路径、搜索、选中项与地图和滚动位置。", "atlas.explore.navigation")]
 [assembly: AtlasFeature("atlas.explore.workspace", "接入可替换工作区", "通过契约载入报告和可用动作，让界面无需认识具体分析器或存储。", "atlas.explore", Inputs = "工作区端口与动作标识", Outputs = "当前图表和动作结果")]
+[assembly: AtlasFeature("atlas.explore.index", "报告索引", "查询原始报告，源码证据仍留在报告里。", "atlas.explore", Inputs = "分析报告", Outputs = "可检索的功能、符号和原文位置")]
 
 [assembly: AtlasFeature("atlas.reports", "报告管理", "保存和查找分析快照，安全更新已有报告。", Kind = FeatureKind.Module)]
 [assembly: AtlasFeature("atlas.reports.store", "读写报告快照", "实现报告创建、读取、列表、替换和删除；中断写入时保留已有报告。", "atlas.reports", Inputs = "报告对象或报告标识", Outputs = "持久化快照或明确的存储错误")]

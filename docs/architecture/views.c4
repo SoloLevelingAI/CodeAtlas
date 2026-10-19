@@ -1,0 +1,51 @@
+views {
+  view context of codeatlas {
+    title '系统上下文'
+    description '本机阅读者与 CodeAtlas。用户报告不会因打开视图而离开本机。'
+    include reader
+    include codeatlas
+    exclude * where kind is container
+    exclude * where kind is component
+  }
+
+  view container of codeatlas {
+    title '容器：宿主'
+    description 'Desktop、Web 与 CLI 是三个宿主，不是三套分析实现。'
+    include * where kind is container
+    exclude * where kind is component
+  }
+
+  view component of codeatlas {
+    title '组件：模块'
+    description '逻辑模块。父子是结构，箭头才是声明的依赖。'
+    include * where kind is component
+  }
+
+  view host-desktop of codeatlas {
+    title 'Desktop 宿主'
+    description '桌面宿主启用分析、报告和探索，不启用 Web 地图页。'
+    include codeatlas.desktop
+    include codeatlas.analysis
+    include codeatlas.reports
+    include codeatlas.explore
+    include codeatlas.explore.*
+  }
+
+  view host-web of codeatlas {
+    title 'Web 宿主'
+    description 'Web 宿主在探索之外启用功能地图页。'
+    include codeatlas.web
+    include codeatlas.analysis
+    include codeatlas.reports
+    include codeatlas.explore
+    include codeatlas.explore.*
+  }
+
+  view host-cli of codeatlas {
+    title 'CLI 宿主'
+    description '命令行只启用分析与报告。'
+    include codeatlas.cli
+    include codeatlas.analysis
+    include codeatlas.reports
+  }
+}

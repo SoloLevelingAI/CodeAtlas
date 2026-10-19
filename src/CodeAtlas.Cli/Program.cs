@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CodeAtlas.Analysis.Core;
 using CodeAtlas.Automation;
 using CodeAtlas.Contracts;
 using CodeAtlas.Exploration;
@@ -29,7 +30,7 @@ public static class Program
             {
                 Print(new { version = 1, commands = new[] {
                     "standards | assess --report <file>",
-                    "analyze|check --root <folder> [--reports <folder>] [--id <id>] [--name <name>] [--require-complete] [--require-structured]",
+                    "analyze|check --root <folder> [--reports <folder>] [--id <id>] [--name <name>] [--target <model.json>] [--warnings-baseline <file>] [--require-complete] [--require-structured]",
                     "reports [--reports <folder>]", "inspect --report <file>",
                     "search --report <file> --query <text>", "source --report <file> --id <node-id>",
                     "ui <status|open|select|locate|expand|search|view|undo|redo|capture|analyze|cancel|window|scroll> [--session default] [arguments]",
@@ -37,7 +38,7 @@ public static class Program
                     "ui select|locate --id <id> | ui expand --id <id> --expanded true|false",
                     "ui search --query <text> | ui view --mode tree|graph | ui capture --out <png>",
                     "ui window --width 1440 --height 900 [--detail-width 560] | ui scroll --offset 500"
-                }, exits = new { success = 0, failure = 1, quality = 2, incomplete = 3, structure = 4, unsupported = 64, cancelled = 130 } });
+                }, exits = new { success = 0, failure = 1, quality = 2, incomplete = 3, structure = 4, warningBaseline = 5, unsupported = 64, cancelled = 130 } });
                 return 0;
             }
             if (command == "ui")
@@ -64,17 +65,23 @@ public static class Program
             }
             if (command is "analyze" or "check")
             {
-                var o = Parse(args[1..], ["root", "reports", "id", "name", "require-complete", "require-structured"]);
+                var o = Parse(args[1..], ["root", "reports", "id", "name", "target", "warnings-baseline", "require-complete", "require-structured"]);
                 string root = Need(o, "root"), directory = o.GetValueOrDefault("reports") ?? DefaultReports;
                 using ServiceProvider services = AtlasRuntime.Create(directory);
                 AnalysisReport report = await services.GetRequiredService<IAnalysisService>().AnalyzeAsync(
-                    new(o.GetValueOrDefault("id") ?? "analysis", o.GetValueOrDefault("name") ?? Path.GetFileName(Path.GetFullPath(root)), root), cancellation.Token);
+                    new(o.GetValueOrDefault("id") ?? "analysis", o.GetValueOrDefault("name") ?? Path.GetFileName(Path.GetFullPath(root)), root, o.GetValueOrDefault("target")), cancellation.Token);
                 await services.GetRequiredService<IReportRepository>().SaveAsync(report, cancellation.Token);
                 int errors = report.Findings.Count(f => f.Severity == FindingSeverity.Error);
                 int unsupported = report.Findings.Count(f => f.Severity == FindingSeverity.Unsupported);
                 int gaps = report.Findings.Count(f => f.Rule is "AT001" or "AT010" or "AT011" or "AT012" or "AT014" or "AT015" or "AT016" or "AT017");
-                Print(new { report.Id, report.Coverage, errors, unsupported, structureGaps = gaps, report = Path.GetFullPath(Path.Combine(directory, report.Id + ".json")) });
+                int warnings = report.Findings.Count(f => f.Severity == FindingSeverity.Warning);
+                Print(new { report.Id, report.Coverage, errors, warnings, unsupported, structureGaps = gaps, target = report.Target is null ? "unknown" : report.Target.System.Id, report = Path.GetFullPath(Path.Combine(directory, report.Id + ".json")) });
                 if (errors > 0) return 2;
+                if (o.TryGetValue("warnings-baseline", out string? baseline))
+                {
+                    IReadOnlyList<string> extra = WarningBaseline.Compare(report, File.ReadAllText(baseline));
+                    if (extra.Count > 0) { Print(new { warningBaseline = extra }); return 5; }
+                }
                 if (o.ContainsKey("require-complete") && (unsupported > 0 || report.Coverage.UnclassifiedSymbols > 0)) return 3;
                 return o.ContainsKey("require-structured") && gaps > 0 ? 4 : 0;
             }

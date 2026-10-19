@@ -13,7 +13,20 @@
 @media(max-width:700px){.workbench{grid-template-columns:1fr}.branch-kind{display:none}.branch-heading{padding-left:8px;padding-right:8px}.branch-children{margin-left:13px;padding-left:8px}.structure-tree{padding:12px}.branch-title{font-size:13px}}
 .workbench.compact-directory{grid-template-columns:minmax(420px,1.35fr) minmax(350px,1fr)}.compact-directory .structure-tree{padding:18px 25px}.compact-directory .module-card>.branch-heading{padding-top:17px}.compact-directory .branch-purpose{font-size:12px}.compact-directory .branch-heading{padding-right:17px}.compact-directory .branch-meta{padding-bottom:14px}.compact-directory .overview-map{justify-content:space-between}.compact-directory #overview-map{max-width:420px}.map-path #toggle-directory{margin-left:auto}
 @media(max-width:1050px){.workbench.compact-directory{grid-template-columns:1fr}.compact-directory .map{height:740px}}
+#c4-breadcrumb{display:flex;align-items:center;gap:8px;padding:0 24px 8px;flex-wrap:wrap}
+#c4-breadcrumb .sep{color:#9aa99f}
+#c4-breadcrumb .current{background:#e8f4ec;border:1px solid #9dbfb4;border-radius:7px;padding:8px 12px;font-weight:650}
+.c4-caption{margin:0 24px 12px;padding:10px 14px;background:#f7faf8;border-radius:10px;color:#3d5148;line-height:1.7}
+#c4-view-name{font-family:ui-monospace,Consolas,monospace;color:#258772;font-weight:650}
+.c4-boxes{display:grid;gap:8px}
+.c4-box{display:block;width:100%;text-align:left;padding:14px;border-radius:12px}
+.c4-box small{display:block;margin-top:4px;color:#7c8a95}
+.c4-layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(280px,.8fr);gap:14px;padding:0 24px 16px;min-height:0;min-width:0}
+.c4-diagram{width:100%;min-width:0;background:#fff;border:1px solid #dfe7e7;border-radius:13px;overflow:auto;min-height:280px}
+.c4-diagram img{width:100%;height:auto;display:block;background:#fbfcfb}
+.c4-diagram figcaption{padding:10px 14px;color:#7c8d86;font-size:11px}
 .module-mode-switch { margin: 12px 18px 0; flex-wrap: wrap; }
+@media(max-width:950px){.c4-layout{grid-template-columns:minmax(0,1fr)}}
 .overview-map > .runtime-roots { display: flex; width: auto; flex: 1; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .runtime-roots button { min-width: 92px; white-space: nowrap; padding: 10px 12px; }
 #runtime-module-details .support p, #runtime-module-details b { overflow-wrap: anywhere; }

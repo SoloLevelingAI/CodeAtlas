@@ -129,7 +129,8 @@ public static class Program
             var index = new ReportIndex(report);
             var guide = ArchitectureGuide.Load();
             Check(guide.Rules.Length == 10 && guide.Migration.Length == 9, "GUI 与 CLI 的规范资源完整且有整理路线");
-            Check(guide.Rules.All(r => r.MarkdownPath == "docs/standards/" + r.Id + ".md" && ArchitectureGuide.ReadMarkdown(r.Id).Contains(r.Requirement, StringComparison.Ordinal)), "每条规范对应真实 Markdown 且应用内原文与要求一致");
+            var standards = new EmbeddedStandardsReader();
+            Check(guide.Rules.All(r => r.MarkdownPath == "docs/standards/" + r.Id + ".md" && standards.ReadMarkdown(r.Id).Contains(r.Requirement, StringComparison.Ordinal)), "每条规范对应真实 Markdown 且应用内原文与要求一致");
             Check(guide.Assess(null).All(a => a.Status == "尚未分析仓库"), "无报告不能通过架构认证");
             AnalysisReport missingEvidence = report with { Coverage = report.Coverage with { UnclassifiedSymbols = 1 } };
             Check(guide.Assess(missingEvidence).Where(a => a.Rule.FindingRules.Length > 0 && !a.Rule.ExternalEvidence).All(a => a.Status.Contains("证据不足", StringComparison.Ordinal)), "缺少声明不伪装成符合规范");

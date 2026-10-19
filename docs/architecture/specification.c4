@@ -1,0 +1,12 @@
+specification {
+  element actor
+  element system
+  element container
+  element component
+
+  relationship dependency
+  relationship uses
+
+  tag runtime
+  tag host
+}

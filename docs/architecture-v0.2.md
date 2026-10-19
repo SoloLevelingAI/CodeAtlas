@@ -80,4 +80,4 @@ registry.Register(new("map", "地图", "查看嵌套结构", new(0, 2, 0), "sear
 
 ## C4 与决策
 
-见 [C4 组件视图](c4/modules.md)、[ADR-0001](adr/0001-startup-module-composition.md) 和 [PR #1 检视记录](reviews/pr-1.md)。v0.2 不把“未发现错误”写成完整认证，也不对其他仓库自动发现、DLL 分发闭包、授权裁剪、热卸载或任意 UI 插件作承诺。
+见 [C4 组件视图](c4/modules.md)、[LikeC4 目标模型](architecture/README.md)、[ADR-0001](adr/0001-startup-module-composition.md) 和 [PR #1 检视记录](reviews/pr-1.md)。`docs/architecture/*.c4` 是目标架构的来源；`scripts/sync-likec4.py` 把它投影成 `target-model.json`，并可用 `--diagrams` 导出 Web 上的 PNG。分析报告的 `Target` 字段保存读到的模型。对照结果是 AT122–AT127：没有模型是未知，不是通过。Web `/architecture` 以这些导出图为主视图，旁边列出漂移诊断，并链回代码地图。v0.2 不把“未发现错误”写成完整认证，也不对其他仓库自动发现、DLL 分发闭包、授权裁剪、热卸载或任意 UI 插件作承诺。

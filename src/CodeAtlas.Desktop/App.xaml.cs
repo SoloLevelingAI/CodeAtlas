@@ -1,6 +1,8 @@
 using System.Windows;
+using CodeAtlas.Composition;
 using CodeAtlas.Framework;
 using CodeAtlas.Contracts;
+using CodeAtlas.Exploration;
 using CodeAtlas.Runtime;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,8 +31,11 @@ public partial class App : System.Windows.Application
             }
             string reports = options.GetValueOrDefault("--reports") ?? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CodeAtlas", "reports");
             services = AtlasRuntime.Create(reports);
+            var desktop = new ServiceCollection();
+            desktop.AddAtlas<IScreenshotExport, PngScreenshotExport>();
+            using ServiceProvider adapters = desktop.BuildServiceProvider();
             var workspace = new DesktopWorkspace(services.GetRequiredService<IAnalysisService>(), services.GetRequiredService<IReportRepository>(), services.GetRequiredService<IReportFileReader>());
-            var window = new MainWindow(workspace, options.GetValueOrDefault("--session") ?? "default");
+            var window = new MainWindow(workspace, options.GetValueOrDefault("--session") ?? "default", adapters.GetRequiredService<IScreenshotExport>(), new EmbeddedStandardsReader());
             control = new DesktopControlServer(options.GetValueOrDefault("--session") ?? "default", window);
             MainWindow = window; window.Show();
             await window.StartAsync(options.GetValueOrDefault("--report"));

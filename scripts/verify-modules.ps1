@@ -19,6 +19,8 @@ try {
     Copy-Item -LiteralPath tests/fixtures/legacy-no-features.json -Destination $reportPath
     python scripts/sync-architecture.py --check
     if ($LASTEXITCODE -ne 0) { throw 'Markdown resource check failed.' }
+    python scripts/sync-likec4.py --check
+    if ($LASTEXITCODE -ne 0) { throw 'LikeC4 target model check failed.' }
     $env:MSBuildEnableWorkloadResolver = 'false'
     $buildArguments = @('build', 'CodeAtlas.slnx', '-c', 'Release', '--nologo', '-v', 'minimal', '-m:1')
     if ($SkipNuGetAudit) { $buildArguments += '-p:NuGetAudit=false' }
@@ -29,7 +31,7 @@ try {
     dotnet tests/CodeAtlas.Desktop.Regression/bin/Release/net10.0/CodeAtlas.Desktop.Regression.dll | Tee-Object -FilePath "$verification/desktop-regression.json"
     if ($LASTEXITCODE -ne 0) { throw 'Desktop state regression failed.' }
     $hostDll = Join-Path $atlasRoot 'src/CodeAtlas.Host/bin/Release/net10.0/CodeAtlas.Host.dll'
-    dotnet $hostDll check --root $atlasRoot --id self --name 'CodeAtlas v0.2 self' --reports $reportPath | Tee-Object -FilePath "$verification/self-check.json"
+    dotnet $hostDll check --root $atlasRoot --id self --name 'CodeAtlas v0.2 self' --reports $reportPath --warnings-baseline (Join-Path $atlasRoot 'docs/quality/self-warning-baseline.json') | Tee-Object -FilePath "$verification/self-check.json"
     if ($LASTEXITCODE -ne 0) { throw 'Self analysis failed.' }
     if ($Browser) {
         $env:ATLAS_URL = "http://127.0.0.1:$Port"
@@ -48,7 +50,7 @@ try {
             }
             if (!$ready) { throw "Host failed to become ready: $url" }
         }
-        foreach ($test in @('module', 'structure', 'focus-map', 'labor', 'browser')) {
+        foreach ($test in @('module', 'structure', 'focus-map', 'labor', 'architecture', 'browser')) {
             & node "tests/$test-check.cjs" | Tee-Object -FilePath "$verification/$test-browser.log"
             if ($LASTEXITCODE -ne 0) { throw "Browser regression failed: $test" }
         }
