@@ -2,13 +2,17 @@ views {
   view context of codeatlas {
     title '系统上下文'
     description '本机阅读者与 CodeAtlas。用户报告不会因打开视图而离开本机。'
-    include *
+    include reader
+    include codeatlas
+    exclude * where kind is container
+    exclude * where kind is component
   }
 
   view container of codeatlas {
     title '容器：宿主'
     description 'Desktop、Web 与 CLI 是三个宿主，不是三套分析实现。'
     include * where kind is container
+    exclude * where kind is component
   }
 
   view component of codeatlas {

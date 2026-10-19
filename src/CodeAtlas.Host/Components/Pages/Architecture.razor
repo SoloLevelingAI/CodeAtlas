@@ -4,7 +4,7 @@
 @inject IExplorerWorkspace WorkspacePort
 @inject NavigationManager Nav
 
-<ReadingChrome Page="architecture" Title="架构视图" Summary="LikeC4 导出的图是主视图。旁边是漂移诊断和代码地图证据。没有模型不是通过。" Workspace="workspace" ReportChanged="ChangeReport">
+<ReadingChrome Page="architecture" Title="架构视图" Summary="一次只看一层。点方框进入下一层，点面包屑返回。没有模型不是通过。" Workspace="workspace" ReportChanged="ChangeReport">
     @if (error is not null)
     {
         <div class="error-banner">@error</div>
@@ -16,7 +16,7 @@
     else if (Model is null)
     {
         <div id="architecture-page" class="stack" data-c4-level="unknown">
-            <div class="note">这份报告没有目标模型。对照结果是未知，不能把空白当成架构已经对齐。</div>
+            <p id="c4-level-caption" class="c4-caption">系统 = 整个产品边界。这份报告没有目标模型，对照结果是未知，不能把空白当成已经对齐。</p>
             @foreach (AnalysisFinding finding in Drift)
             {
                 <div class="relation" data-drift-rule="@finding.Rule"><b>@finding.Rule</b><span class="description">@finding.Message</span></div>
@@ -25,58 +25,106 @@
     }
     else
     {
-        <div id="architecture-page" data-c4-level="@level" data-c4-host="@(hostId ?? "")" data-c4-module="@(moduleId ?? "")">
-            <div class="c4-levels">
-                <button type="button" id="c4-system" class="@(level == "system" ? "active" : "")" @onclick="ShowSystem">系统</button>
-                <button type="button" id="c4-host" class="@(level == "host" ? "active" : "")" @onclick="ShowHost" disabled="@(level == "system")">宿主</button>
-                <button type="button" id="c4-module" class="@(level == "module" ? "active" : "")" @onclick="ShowModule" disabled="@(hostId is null)">模块</button>
-                <button type="button" id="c4-code" class="@(level == "code" ? "active" : "")" @onclick="ShowCode" disabled="@(moduleId is null)">代码</button>
-            </div>
+        <div id="architecture-page" data-c4-level="@level" data-c4-view="@DiagramView" data-c4-host="@(hostId ?? "")" data-c4-module="@(moduleId ?? "")">
+            <nav id="c4-breadcrumb" aria-label="架构分层">
+                @if (level == "system")
+                {
+                    <span id="c4-system" class="current" aria-current="page">系统</span>
+                }
+                else
+                {
+                    <button type="button" id="c4-system" @onclick="ShowSystem">系统</button>
+                    <span class="sep" aria-hidden="true">→</span>
+                    @if (level == "host")
+                    {
+                        <span id="c4-host" class="current" aria-current="page">宿主（@HostShort）</span>
+                    }
+                    else
+                    {
+                        <button type="button" id="c4-host" @onclick="ShowHostLevel">宿主（@HostShort）</button>
+                        <span class="sep" aria-hidden="true">→</span>
+                        @if (level == "module")
+                        {
+                            <span id="c4-module" class="current" aria-current="page">模块（@ModuleShort）</span>
+                        }
+                        else
+                        {
+                            <button type="button" id="c4-module" @onclick="ShowModuleLevel">模块（@ModuleShort）</button>
+                            <span class="sep" aria-hidden="true">→</span>
+                            <span id="c4-code" class="current" aria-current="page">代码</span>
+                        }
+                    }
+                }
+            </nav>
+            <p id="c4-level-caption" class="c4-caption">@LevelCaption</p>
             <div class="c4-layout">
                 <figure class="c4-diagram">
                     @if (level == "code")
                     {
-                        <figcaption id="c4-code-caption">代码层打开报告里的源码证据，不再另画一张调用图。</figcaption>
+                        <figcaption id="c4-code-caption">代码层不使用 LikeC4 图。类型和原文在代码地图里。</figcaption>
                     }
                     else
                     {
                         <img id="c4-diagram" src="@DiagramSrc" alt="@DiagramTitle" data-c4-diagram="@DiagramView" />
-                        <figcaption>@DiagramTitle · 由 LikeC4 从 docs/architecture 导出，不是手绘示意图。 <a href="@DiagramSrc" target="_blank" rel="noopener">打开原图</a></figcaption>
+                        <figcaption>
+                            <span id="c4-view-name">@DiagramView</span>
+                            · @DiagramFile
+                            · @DiagramTitle
+                            · <a href="@DiagramSrc" target="_blank" rel="noopener">打开原图</a>
+                        </figcaption>
                     }
                 </figure>
                 <section class="panel">
-                    <div class="panel-head"><strong>@SideTitle</strong><span>@Model.System.Name · @Model.System.Owner / @Model.System.Domain</span></div>
+                    <div class="panel-head"><strong>@SideTitle</strong><span>只进入下一层</span></div>
                     <div class="scroll-list">
-                        @if (level == "system")
-                        {
-                            @foreach (TargetHost item in Model.Hosts)
+                        <div class="c4-boxes">
+                            @if (level == "system")
                             {
-                                <button type="button" class="entry" data-host="@item.Id" @onclick="() => OpenHost(item.Id)">
-                                    <b>@item.Name</b><span>@item.Technology · @item.Owner / @item.Domain</span>
+                                @foreach (TargetHost item in Model.Hosts)
+                                {
+                                    <button type="button" class="c4-box" data-host="@item.Id" @onclick="() => OpenHost(item.Id)">
+                                        <b>@HostShortName(item.Id)</b>
+                                        <small>@item.Name · @item.Technology</small>
+                                    </button>
+                                }
+                            }
+                            else if (level == "host" && CurrentHost is { } currentHost)
+                            {
+                                @foreach (TargetModule item in DirectModules(currentHost))
+                                {
+                                    <button type="button" class="c4-box" data-module="@item.Id" @onclick="() => OpenModule(item.Id)">
+                                        <b>@item.Name</b>
+                                        <small>@item.Id</small>
+                                    </button>
+                                }
+                            }
+                            else if (level == "module" && CurrentModule is { } current)
+                            {
+                                @foreach (TargetModule child in ChildModules(current))
+                                {
+                                    <button type="button" class="c4-box" data-module="@child.Id" @onclick="() => OpenModule(child.Id)">
+                                        <b>@child.Name</b>
+                                        <small>子模块 · @child.Id</small>
+                                    </button>
+                                }
+                                <button type="button" id="c4-code" class="c4-box" @onclick="ShowCode">
+                                    <b>进入代码</b>
+                                    <small>@current.Id 的类型与原文</small>
                                 </button>
                             }
-                        }
-                        else if (level is "host" or "module" && CurrentHost is { } currentHost)
-                        {
-                            @foreach (TargetModule item in HostModules(currentHost))
+                            else if (level == "code" && CurrentModule is { } codeModule)
                             {
-                                <button type="button" class="entry @(item.Id == moduleId ? "selected" : "")" data-module="@item.Id" @onclick="() => OpenModule(item.Id)">
-                                    <b>@item.Name</b><span>@item.Id · @item.Owner / @item.Domain</span>
-                                </button>
+                                <div class="note">@codeModule.Name 的负责人是 @codeModule.Owner，领域是 @codeModule.Domain。模型箭头不是调用证据。</div>
+                                @if (ModuleHref(codeModule) is { } href)
+                                {
+                                    <a class="evidence-link" id="c4-code-link" href="@href">在代码地图中查看此模块</a>
+                                }
                             }
-                        }
-                        else if (level == "code" && CurrentModule is { } current)
-                        {
-                            <div class="note">@current.Name 的负责人是 @current.Owner，领域是 @current.Domain。下面的链接回到代码地图，不把模型箭头当成调用证据。</div>
-                            @if (ModuleHref(current) is { } href)
-                            {
-                                <a class="evidence-link" id="c4-code-link" href="@href">在代码地图中查看此模块</a>
-                            }
-                        }
-                        <h3>漂移</h3>
+                        </div>
+                        <h3>这一层的漂移</h3>
                         @if (!VisibleDrift.Any())
                         {
-                            <div class="note" id="c4-drift-empty">这一层没有 AT122–AT127。没有诊断只说明模型与当前图没有这几条已知差异，不是认证通过。</div>
+                            <div class="note" id="c4-drift-empty">这一层没有对应的 AT122–AT127。没有诊断只说明当前层没有这些已知差异，不是认证通过。</div>
                         }
                         @foreach (AnalysisFinding finding in VisibleDrift)
                         {
@@ -110,36 +158,60 @@
 
     private TargetArchitecture? Model => workspace?.Report.Target;
     private IEnumerable<AnalysisFinding> Drift => workspace?.Report.Findings.Where(finding => finding.Rule is "AT122" or "AT123" or "AT124" or "AT125" or "AT126" or "AT127") ?? [];
-    private IEnumerable<AnalysisFinding> VisibleDrift => level == "module" && moduleId is not null
-        ? Drift.Where(finding => finding.Message.Contains(moduleId, StringComparison.Ordinal))
-        : Drift;
     private TargetHost? CurrentHost => Model?.Hosts.FirstOrDefault(item => item.Id == hostId);
     private TargetModule? CurrentModule => Model?.Modules.FirstOrDefault(item => item.Id == moduleId);
+    private string HostShort => CurrentHost is null ? "" : HostShortName(CurrentHost.Id);
+    private string ModuleShort => CurrentModule?.Name ?? moduleId ?? "";
     private string DiagramView => level switch
     {
-        "host" when hostId is not null && Model!.Views.Any(view => view.Id == "host-" + hostId) => "host-" + hostId,
-        "module" => "component",
         "host" => "container",
+        "module" => "component",
         _ => "context"
     };
     private string DiagramSrc => "/" + (Model!.Views.FirstOrDefault(view => view.Id == DiagramView)?.Diagram ?? "architecture/" + DiagramView + ".png");
+    private string DiagramFile => Model!.Views.FirstOrDefault(view => view.Id == DiagramView)?.Diagram ?? "architecture/" + DiagramView + ".png";
     private string DiagramTitle => Model!.Views.FirstOrDefault(view => view.Id == DiagramView)?.Title ?? DiagramView;
+    private string LevelCaption => level switch
+    {
+        "host" => "宿主 = 怎么跑起来。这一层只看 Desktop、Web、CLI 三个入口，不展开模块。图是 container。",
+        "module" => "模块 = 可组合的能力。这一层只看模块和声明的依赖，不进入具体类型。图是 component。",
+        "code" => "代码 = 具体类型与证据。这一层没有架构图，只打开报告里的源码位置。",
+        _ => "系统 = 整个产品边界。这一层只看 CodeAtlas 和谁发生关系，不展开宿主内部。图是 context。"
+    };
     private string SideTitle => level switch
     {
-        "host" => CurrentHost?.Name ?? "宿主",
-        "module" or "code" => CurrentModule?.Name ?? "模块",
-        _ => "选择宿主"
+        "host" => "进入模块",
+        "module" => "进入子模块或代码",
+        "code" => "代码证据",
+        _ => "进入宿主"
     };
 
-    private IEnumerable<TargetModule> HostModules(TargetHost host)
+    private IEnumerable<AnalysisFinding> VisibleDrift => level switch
+    {
+        "code" or "module" => Drift.Where(finding => moduleId is not null && finding.Rule is "AT125" or "AT126" or "AT127" && Mentions(finding.Message, moduleId)),
+        "host" when CurrentHost is { } host => Drift.Where(finding => finding.Rule is "AT123" or "AT124" && Scope(host).Any(id => Mentions(finding.Message, id))),
+        _ => Drift.Where(finding => finding.Rule == "AT122" || (finding.Rule is "AT123" or "AT124" && Model!.Hosts.All(host => !Scope(host).Any(id => Mentions(finding.Message, id)))))
+    };
+
+    private IEnumerable<TargetModule> DirectModules(TargetHost host) =>
+        host.Modules.Select(id => Model!.Modules.FirstOrDefault(module => module.Id == id)).OfType<TargetModule>();
+
+    private IEnumerable<TargetModule> ChildModules(TargetModule module) =>
+        Model!.Modules.Where(item => item.Parent == module.Id && (item.Id != "atlas.explore.map" || CurrentHost?.Modules.Contains(item.Id) == true));
+
+    private IEnumerable<string> Scope(TargetHost host)
     {
         var roots = host.Modules.ToHashSet(StringComparer.Ordinal);
-        return Model!.Modules.Where(module =>
-            (roots.Contains(module.Id) || roots.Contains(RootModule(module))) &&
-            (module.Id != "atlas.explore.map" || roots.Contains(module.Id)));
+        foreach (TargetModule module in Model!.Modules)
+        {
+            if ((roots.Contains(module.Id) || roots.Contains(RootOf(module))) && (module.Id != "atlas.explore.map" || roots.Contains(module.Id)))
+            {
+                yield return module.Id;
+            }
+        }
     }
 
-    private string RootModule(TargetModule module)
+    private string RootOf(TargetModule module)
     {
         string current = module.Id;
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -153,10 +225,34 @@
         return feature is null ? null : EvidenceLocator.MapHref(workspace.Report.Id, null, feature.Source.Path, feature.Source.Line, workspace.Report.Graph);
     }
 
+    private static string HostShortName(string id) => id switch
+    {
+        "desktop" => "Desktop",
+        "web" => "Web",
+        "cli" => "CLI",
+        _ => id
+    };
+
+    private static bool Mentions(string message, string id)
+    {
+        int index = 0;
+        while ((index = message.IndexOf(id, index, StringComparison.Ordinal)) >= 0)
+        {
+            int end = index + id.Length;
+            bool left = index == 0 || !IsIdChar(message[index - 1]);
+            bool right = end >= message.Length || !IsIdChar(message[end]);
+            if (left && right) return true;
+            index = end;
+        }
+        return false;
+    }
+
+    private static bool IsIdChar(char value) => char.IsAsciiLetterOrDigit(value) || value is '.' or '_' or '-';
+
     private void ShowSystem() { level = "system"; hostId = null; moduleId = null; }
+    private void ShowHostLevel() { if (hostId is not null) { level = "host"; moduleId = null; } }
+    private void ShowModuleLevel() { if (moduleId is not null) level = "module"; }
     private void ShowCode() { if (moduleId is not null) level = "code"; }
-    private void ShowHost() { if (hostId is not null) level = "host"; }
-    private void ShowModule() { if (moduleId is not null) level = "module"; else if (hostId is not null) level = "host"; }
     private void OpenHost(string id) { hostId = id; moduleId = null; level = "host"; }
     private void OpenModule(string id) { moduleId = id; level = "module"; }
     private void ChangeReport(string id) => Nav.NavigateTo("/architecture?report=" + Uri.EscapeDataString(id));
